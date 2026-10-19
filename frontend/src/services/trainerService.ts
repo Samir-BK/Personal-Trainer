@@ -1,4 +1,4 @@
-import axios from "axios". // JavaScript library that lets your frontend communicate with a backend
+import axios from "axios"; // JavaScript library that lets your frontend communicate with a backend
 import type { Customer, Training } from "../types/trainer";
 
 // Read API base URL from env variables
@@ -18,7 +18,7 @@ const client = axios.create({
 export const fetchCustomers = async (): Promise<Customer[]> => {
     const response = await client.get("customers");
     // Optional chaining prevents runtime errors if _embedded or customers is undefined
-    return response.data._embeded?.customers || []; 
+    return response.data._embedded?.customers || []; 
 } 
 
 /**
