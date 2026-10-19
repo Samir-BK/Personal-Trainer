@@ -26,6 +26,15 @@ export const fetchCustomers = async (): Promise<Customer[]> => {
  * Uses /gettrainings helper endpoint which returns pre-joined customer objects.
  */
 export const fetchTrainings = async (): Promise<Training []> => {
-    const response = await client.get("gettrainings");
+    const response = await client.get("trainings");
+    return response.data;
+}
+
+// Fetch cusotmer's details using the URL supplied by the API
+
+export const fetchCustomersByURL = async (
+    url: string
+): Promise<Customer> => {
+    const response = await axios.get<Customer>(url); 
     return response.data;
 }
