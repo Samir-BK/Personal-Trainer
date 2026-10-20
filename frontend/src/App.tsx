@@ -1,121 +1,49 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+// Routing components from React Router
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+// Material UI components for layout and styling
+import { AppBar, Toolbar, Typography, Button, Container } from '@mui/material';
+// Page components, one for each route
+import { CustomerList } from './pages/CustomerList';
+import { TrainingList } from './pages/TrainingList';
 
-function App() {
-  const [count, setCount] = useState(0)
+// Root component of the application
+export function App() {
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+      // BrowserRouter enables client-side routing using the browser's History API.
+      // Everything that uses routing (Link, Routes) must be inside it.
+    <BrowserRouter>
+        {/* Top Application Bar with Navigation */}
+      {/* position="static": the bar sits in normal page flow and is not fixed to the top */}
+      <AppBar position='static'>
+        <Toolbar>
+          {/* App title. flexGrow: 1 makes it take all free space,
+              which pushes the buttons to the right edge */}
+              <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+            Personal Trainer Management
+          </Typography>
+          {/* Navigation Buttons linked to React Router paths */}
+          {/* component={Link} renders the MUI Button as a router Link,
+              so clicking navigates without reloading the page */}
+          <Button color='inherit' component = {Link} to="/customers">Customers</Button>
+          <Button color='inherit' component = {Link} to = "/trainings">Trainings</Button>
+        </Toolbar>
+      </AppBar>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      {/* Main Content Area */}
+      {/* Container centers the content; mt: 2 adds top margin (theme spacing units) */}
+      <Container sx={{ mt: 2 }}>
+      {/* Routes renders only the first Route whose path matches the current URL */}
+      <Routes>
+        {/* Home page: shows the customer list by default */}
+            <Route path='/' element={<CustomerList/>}/>
+        {/* Customers page */}
+            <Route path='/customers' element= {<CustomerList />}/>
+           {/* Trainings page */}
+           <Route path='/trainings' element = {<TrainingList />}/>
+      </Routes>
+      </Container>
+    </BrowserRouter>
   )
 }
 
