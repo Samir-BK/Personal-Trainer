@@ -70,12 +70,6 @@ export const TrainingList = () => {
                 flex: 1,
                 type: "number"
             },
-            {
-                field: "duration",
-                headerName: "Duration (min)",
-                flex: 1,
-                type: "number"
-            },
             // Display the activity, such as Running or Cycling.
             {
                 field: "activity",

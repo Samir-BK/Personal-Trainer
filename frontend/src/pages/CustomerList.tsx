@@ -34,7 +34,7 @@ export const CustomerList = () => {
 
             {/* Page heading */}
             <Typography variant = "h4" component = "h1" gutterBottom>
-                Customer Direcotry
+                Customer Directory
             </Typography>
 
              {/* Box wraps the table and sets its dimensions */}

@@ -27,7 +27,7 @@ export const fetchCustomers = async (): Promise<Customer[]> => {
  */
 export const fetchTrainings = async (): Promise<Training []> => {
     const response = await client.get("trainings");
-    return response.data;
+    return response.data._embedded?.trainings || [];
 }
 
 // Fetch cusotmer's details using the URL supplied by the API
@@ -35,6 +35,8 @@ export const fetchTrainings = async (): Promise<Training []> => {
 export const fetchCustomersByURL = async (
     url: string
 ): Promise<Customer> => {
-    const response = await axios.get<Customer>(url); 
+    // Upgrade http to https to prevent mixed-content blocks
+    const secureUrl = url.replace("http://", "https://")
+    const response = await axios.get<Customer>(secureUrl); 
     return response.data;
 }
