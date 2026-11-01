@@ -5,13 +5,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityManager;
 
 import static org.junit.jupiter.api.Assertions.*;
-
 
 @SpringBootTest
 @Transactional
 class ClientRepositoryTest {
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Autowired
     private ClientRepository clientRepository;
@@ -19,10 +22,13 @@ class ClientRepositoryTest {
     @Test
     void shouldSaveAndFindClient() {
         Client client = new Client("Samir", "B K", "sam123@gmail.com");
-        
+
         Client savedClient = clientRepository.save(client);
 
         assertNotNull(savedClient.getId());
+
+        entityManager.flush();
+        entityManager.clear();
 
         Client foundClient = clientRepository.findById(savedClient.getId())
                 .orElseThrow();
@@ -31,4 +37,4 @@ class ClientRepositoryTest {
         assertEquals("sam123@gmail.com", foundClient.getEmail());
     }
 
-}   
+}
