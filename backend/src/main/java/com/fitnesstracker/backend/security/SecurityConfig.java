@@ -27,9 +27,13 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
 
                 .authorizeHttpRequests(auth -> auth
-                        // Anyone can create a trainer account.
+                        // New trainers must be able to register without login
                         .requestMatchers(HttpMethod.POST, "/api/trainers/register").permitAll()
 
+                        // Existing trainers must be able to submit credentials
+                        // before they have an authenticated session.
+                        .requestMatchers(HttpMethod.POST, "/api/trainers/login").permitAll()
+                        
                         // Everything else requires authentication.
                         .anyRequest().authenticated());
 
