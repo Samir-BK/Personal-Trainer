@@ -12,6 +12,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
 public class SecurityConfig {
@@ -26,20 +27,20 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // For this stateless JSON API, disable the default CSRF protection.
-                // Revisit this if authentication later uses browser cookies.
                 .csrf(csrf -> csrf.disable())
-
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                .securityContext(context -> context
+                        .securityContextRepository(securityContextRepository()))
                 .authorizeHttpRequests(auth -> auth
-                        // New trainers must be able to register without login
                         .requestMatchers(HttpMethod.POST, "/api/trainers/register").permitAll()
-
-                        // Existing trainers must be able to submit credentials
-                        // before they have an authenticated session.
                         .requestMatchers(HttpMethod.POST, "/api/trainers/login").permitAll()
-
-                        // Everything else requires authentication.
-                        .anyRequest().authenticated());
+                        .anyRequest().authenticated())
+                .exceptionHandling(exceptions -> exceptions
+                        // Return 401 when a request has no authenticated trainer.
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+                        }));
 
         return http.build();
     }
