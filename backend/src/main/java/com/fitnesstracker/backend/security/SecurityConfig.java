@@ -31,25 +31,27 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-.csrf(csrf -> csrf
-        // Store the CSRF token in a cookie so React can read it.
-        // Unlike the session cookie, this token must be accessible
-        // to JavaScript so Axios can send it in a request header.
-        .csrfTokenRepository(
-                CookieCsrfTokenRepository.withHttpOnlyFalse()
-        )
+                .csrf(csrf -> csrf
+                        // Store the CSRF token in a cookie so React can read it.
+                        // Unlike the session cookie, this token must be accessible
+                        // to JavaScript so Axios can send it in a request header.
+                        .csrfTokenRepository(
+                                CookieCsrfTokenRepository.withHttpOnlyFalse())
 
-        // Use the plain CSRF token value in request headers.
-        // This is appropriate for a JavaScript client that reads
-        // the token from a cookie and sends it back in X-XSRF-TOKEN.
-        .csrfTokenRequestHandler(
-                new CsrfTokenRequestAttributeHandler()
-        )
-)                .sessionManagement(session -> session
+                        // Use the plain CSRF token value in request headers.
+                        // This is appropriate for a JavaScript client that reads
+                        // the token from a cookie and sends it back in X-XSRF-TOKEN.
+                        .csrfTokenRequestHandler(
+                                new CsrfTokenRequestAttributeHandler()))
+
+                .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .securityContext(context -> context
                         .securityContextRepository(securityContextRepository()))
+
                 .authorizeHttpRequests(auth -> auth
+                        // React needs a CSRF token before authentication.
+                        .requestMatchers("/api/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/trainers/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/trainers/login").permitAll()
                         .anyRequest().authenticated())
