@@ -54,30 +54,44 @@ public class TrainerService {
                 savedTrainer.getLastName(),
                 savedTrainer.getEmail());
     }
+
     public TrainerResponse loginTrainer(TrainerLoginRequest request) {
 
-    // Find the trainer by email.
-    // If the email does not exist, return the same generic error
-    // we would use for an incorrect password.
-    Trainer trainer = trainerRepository.findByEmail(request.email())
+        // Find the trainer by email.
+        // If the email does not exist, return the same generic error
+        // we would use for an incorrect password.
+        Trainer trainer = trainerRepository.findByEmail(request.email())
+                .orElseThrow(() -> new InvalidCredentialsException("Invalid email or password"));
+
+        // BCrypt hashes cannot be decrypted.
+        // matches() checks whether the submitted password corresponds
+        // to the stored hash without exposing the original password.
+        boolean passwordMatches = passwordEncoder.matches(
+                request.password(),
+                trainer.getPasswordHash());
+
+        if (!passwordMatches) {
+            throw new InvalidCredentialsException("Invalid email or password");
+        }
+
+        // Return only public trainer information.
+        // Never return the password or its BCrypt hash.
+        return new TrainerResponse(
+                trainer.getId(),
+                trainer.getFirstName(),
+                trainer.getLastName(),
+                trainer.getEmail());
+    }
+    public TrainerResponse getTrainerById(Long trainerId) {
+
+    // The trainer ID comes from Spring Security's authenticated principal.
+    // Fetching the account from PostgreSQL gives us its current profile data.
+    Trainer trainer = trainerRepository.findById(trainerId)
             .orElseThrow(() ->
-                    new InvalidCredentialsException("Invalid email or password")
+                    new IllegalArgumentException("Trainer not found")
             );
 
-    // BCrypt hashes cannot be decrypted.
-    // matches() checks whether the submitted password corresponds
-    // to the stored hash without exposing the original password.
-    boolean passwordMatches = passwordEncoder.matches(
-            request.password(),
-            trainer.getPasswordHash()
-    );
-
-    if (!passwordMatches) {
-        throw new InvalidCredentialsException("Invalid email or password");
-    }
-
-    // Return only public trainer information.
-    // Never return the password or its BCrypt hash.
+    // Never return the password hash.
     return new TrainerResponse(
             trainer.getId(),
             trainer.getFirstName(),
