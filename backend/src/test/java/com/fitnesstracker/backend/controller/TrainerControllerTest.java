@@ -196,6 +196,6 @@ class TrainerControllerTest {
         // No login request and no session cookie are provided.
         // Therefore, Spring Security must deny access.
         mockMvc.perform(get("/api/trainers/me"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 }
