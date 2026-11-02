@@ -95,13 +95,12 @@ public class TrainerController {
     }
 
     @GetMapping("/me")
-public ResponseEntity<TrainerResponse> getCurrentTrainer(
-        @AuthenticationPrincipal Long trainerId
-) {
-    // Spring Security obtains this ID from the authenticated session,
-    // not from an ID supplied by the frontend.
-    TrainerResponse trainer = trainerService.getTrainerById(trainerId);
+    public ResponseEntity<TrainerResponse> getCurrentTrainer(
+            @AuthenticationPrincipal Long trainerId) {
+        // Spring Security obtains this ID from the authenticated session,
+        // not from an ID supplied by the frontend.
+        TrainerResponse trainer = trainerService.getTrainerById(trainerId);
 
-    return ResponseEntity.ok(trainer);
-}
+        return ResponseEntity.ok(trainer);
+    }
 }
