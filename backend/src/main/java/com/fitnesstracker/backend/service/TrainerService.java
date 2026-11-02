@@ -8,6 +8,8 @@ import com.fitnesstracker.backend.repository.TrainerRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.fitnesstracker.backend.exception.DuplicateEmailException;
+
 @Service // Registers this class as a Spring-managed service.
 public class TrainerService {
 
@@ -18,8 +20,7 @@ public class TrainerService {
     // Spring provides the repository and password encoder automatically.
     public TrainerService(
             TrainerRepository trainerRepository,
-            PasswordEncoder passwordEncoder
-    ) {
+            PasswordEncoder passwordEncoder) {
         this.trainerRepository = trainerRepository;
         this.passwordEncoder = passwordEncoder;
     }
@@ -28,7 +29,7 @@ public class TrainerService {
 
         // Prevent registration when an account already uses this email.
         if (trainerRepository.findByEmail(request.email()).isPresent()) {
-            throw new IllegalArgumentException("Email already registered");
+            throw new DuplicateEmailException("Email already registered");
         }
 
         // Hash the password before storing it.
@@ -39,8 +40,7 @@ public class TrainerService {
                 request.firstName(),
                 request.lastName(),
                 request.email(),
-                hashedPassword
-        );
+                hashedPassword);
 
         // JpaRepository saves the new trainer to PostgreSQL.
         Trainer savedTrainer = trainerRepository.save(trainer);
@@ -50,7 +50,6 @@ public class TrainerService {
                 savedTrainer.getId(),
                 savedTrainer.getFirstName(),
                 savedTrainer.getLastName(),
-                savedTrainer.getEmail()
-        );
+                savedTrainer.getEmail());
     }
 }
