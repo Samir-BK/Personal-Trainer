@@ -8,6 +8,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.http.HttpStatus;
+import com.fitnesstracker.backend.exception.InvalidCredentialsException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -41,5 +42,16 @@ public class GlobalExceptionHandler {
                 .body(Map.of(
                         "error", "Validation failed",
                         "fields", fieldErrors));
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidCredentials(
+            InvalidCredentialsException exception) {
+        // HTTP 401 means the submitted credentials are not valid.
+        // Use the same message for unknown emails and incorrect passwords
+        // to avoid revealing which trainer accounts exist.
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("error", exception.getMessage()));
     }
 }
