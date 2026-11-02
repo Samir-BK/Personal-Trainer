@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
+import com.fitnesstracker.backend.exception.DuplicateEmailException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -79,10 +80,10 @@ class TrainerServiceTest {
         trainerService.registerTrainer(request);
 
         // A second registration with the same email must be rejected.
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> trainerService.registerTrainer(request)
-        );
+        DuplicateEmailException exception = assertThrows(
+        DuplicateEmailException.class,
+        () -> trainerService.registerTrainer(request)
+);
 
         assertEquals("Email already registered", exception.getMessage());
     }
