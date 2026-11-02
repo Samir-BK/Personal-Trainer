@@ -15,6 +15,9 @@ import org.springframework.security.web.context.SecurityContextRepository;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+
 @Configuration
 public class SecurityConfig {
 
@@ -28,8 +31,21 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session
+.csrf(csrf -> csrf
+        // Store the CSRF token in a cookie so React can read it.
+        // Unlike the session cookie, this token must be accessible
+        // to JavaScript so Axios can send it in a request header.
+        .csrfTokenRepository(
+                CookieCsrfTokenRepository.withHttpOnlyFalse()
+        )
+
+        // Use the plain CSRF token value in request headers.
+        // This is appropriate for a JavaScript client that reads
+        // the token from a cookie and sends it back in X-XSRF-TOKEN.
+        .csrfTokenRequestHandler(
+                new CsrfTokenRequestAttributeHandler()
+        )
+)                .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .securityContext(context -> context
                         .securityContextRepository(securityContextRepository()))
