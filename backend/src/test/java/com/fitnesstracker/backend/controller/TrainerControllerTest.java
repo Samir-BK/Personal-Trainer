@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import org.springframework.transaction.annotation.Transactional;
 import jakarta.servlet.http.HttpSession;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fitnesstracker.backend.dto.TrainerLoginRequest;
 
@@ -197,5 +198,46 @@ class TrainerControllerTest {
         // Therefore, Spring Security must deny access.
         mockMvc.perform(get("/api/trainers/me"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldInvalidateTrainerSessionAfterLogout() throws Exception {
+        // Arrange: create a trainer account with a BCrypt-hashed password.
+        trainerService.registerTrainer(new TrainerRegistrationRequest(
+                "Samiee",
+                "Logout",
+                "Samiee.logout@example.com",
+                "SecurePassword123!"));
+
+        // Log in through the real HTTP endpoint.
+        // Spring Security saves authentication in the HTTP session.
+        TrainerLoginRequest loginRequest = new TrainerLoginRequest("Samiee.logout@example.com",
+                "SecurePassword123!");
+
+        MockHttpSession session = (MockHttpSession) mockMvc.perform(
+                post("/api/trainers/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getRequest()
+                .getSession(false);
+        // Confirm the session works before logout.
+        mockMvc.perform(get("/api/trainers/me").session(session))
+                .andExpect(status().isOk());
+
+        // Act: log out using the same authenticated session.
+        mockMvc.perform(get("/api/trainers/logout").session(session))
+                .andExpect(status().isNoContent());
+
+        // Assert: the old session must no longer grant access.
+        // MockHttpSession may reject reuse after invalidation, so create
+        // a fresh request without authentication to verify access is denied.
+        mockMvc.perform(get("/api/trainers/me").session(session))
+                .andExpect(status().isUnauthorized());
+
+        // Spring Security must invalidate the session during logout.
+        // This is stronger than merely checking an anonymous request.
+        assertTrue(session.isInvalid());
     }
 }
