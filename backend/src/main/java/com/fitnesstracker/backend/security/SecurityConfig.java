@@ -13,6 +13,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpStatus;
 
 @Configuration
 public class SecurityConfig {
@@ -40,6 +41,18 @@ public class SecurityConfig {
                         // Return 401 when a request has no authenticated trainer.
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+                        }))
+                .logout(logout -> logout
+                        // React sends POST /api/trainers/logout to end the session.
+                        .logoutUrl("/api/trainers/logout")
+
+                        // Delete the authenticated session and its security context.
+                        .invalidateHttpSession(true)
+                        .clearAuthentication(true)
+
+                        // Return HTTP 204 instead of redirecting to a webpage.
+                        .logoutSuccessHandler((request, response, authentication) -> {
+                            response.setStatus(HttpStatus.NO_CONTENT.value());
                         }));
 
         return http.build();
