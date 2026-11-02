@@ -13,6 +13,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import com.fitnesstracker.backend.exception.DuplicateEmailException;
+import com.fitnesstracker.backend.dto.TrainerLoginRequest;
+import com.fitnesstracker.backend.exception.InvalidCredentialsException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -87,4 +89,73 @@ class TrainerServiceTest {
 
         assertEquals("Email already registered", exception.getMessage());
     }
+    @Test
+void shouldLoginWithCorrectCredentials() {
+
+    // Arrange: register a trainer so PostgreSQL contains a real
+    // BCrypt password hash for the login test.
+    trainerService.registerTrainer(new TrainerRegistrationRequest(
+            "Jamie",
+            "Taylor",
+            "jamie.login@example.com",
+            "SecurePassword123!"
+    ));
+
+    // Act: log in using the same credentials.
+    TrainerResponse response = trainerService.loginTrainer(
+            new TrainerLoginRequest(
+                    "jamie.login@example.com",
+                    "SecurePassword123!"
+            )
+    );
+
+    // Assert: the service returns the correct trainer.
+    assertNotNull(response.id());
+    assertEquals("jamie.login@example.com", response.email());
+    assertEquals("Jamie", response.firstName());
+}
+
+@Test
+void shouldRejectIncorrectPassword() {
+
+    // Arrange: create a real trainer account.
+    trainerService.registerTrainer(new TrainerRegistrationRequest(
+            "Jamie",
+            "Taylor",
+            "jamie.wrongpassword@example.com",
+            "CorrectPassword123!"
+    ));
+
+    // Act and assert: an incorrect password must be rejected.
+    InvalidCredentialsException exception = assertThrows(
+            InvalidCredentialsException.class,
+            () -> trainerService.loginTrainer(
+                    new TrainerLoginRequest(
+                            "jamie.wrongpassword@example.com",
+                            "WrongPassword123!"
+                    )
+            )
+    );
+
+    // Do not reveal whether the email or password was incorrect.
+    assertEquals("Invalid email or password", exception.getMessage());
+}
+
+@Test
+void shouldRejectUnknownEmail() {
+
+    // No trainer is registered with this email.
+    // The response must match the incorrect-password case.
+    InvalidCredentialsException exception = assertThrows(
+            InvalidCredentialsException.class,
+            () -> trainerService.loginTrainer(
+                    new TrainerLoginRequest(
+                            "unknown.login@example.com",
+                            "SomePassword123!"
+                    )
+            )
+    );
+
+    assertEquals("Invalid email or password", exception.getMessage());
+}
 }
