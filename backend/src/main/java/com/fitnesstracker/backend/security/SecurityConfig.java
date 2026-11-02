@@ -9,6 +9,10 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
+
 @Configuration
 public class SecurityConfig {
 
@@ -33,10 +37,19 @@ public class SecurityConfig {
                         // Existing trainers must be able to submit credentials
                         // before they have an authenticated session.
                         .requestMatchers(HttpMethod.POST, "/api/trainers/login").permitAll()
-                        
+
                         // Everything else requires authentication.
                         .anyRequest().authenticated());
 
         return http.build();
+    }
+
+    @Bean
+    public SecurityContextRepository securityContextRepository() {
+
+        // Store authenticated users' security contexts in HTTP sessions.
+        // Spring can retrieve the authentication on later requests
+        // using the browser's JSESSIONID cookie.
+        return new HttpSessionSecurityContextRepository();
     }
 }
