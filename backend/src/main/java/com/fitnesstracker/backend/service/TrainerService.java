@@ -82,21 +82,19 @@ public class TrainerService {
                 trainer.getLastName(),
                 trainer.getEmail());
     }
+
     public TrainerResponse getTrainerById(Long trainerId) {
 
-    // The trainer ID comes from Spring Security's authenticated principal.
-    // Fetching the account from PostgreSQL gives us its current profile data.
-    Trainer trainer = trainerRepository.findById(trainerId)
-            .orElseThrow(() ->
-                    new IllegalArgumentException("Trainer not found")
-            );
+        // The trainer ID comes from Spring Security's authenticated principal.
+        // Fetching the account from PostgreSQL gives us its current profile data.
+        Trainer trainer = trainerRepository.findById(trainerId)
+                .orElseThrow(() -> new IllegalArgumentException("Trainer not found"));
 
-    // Never return the password hash.
-    return new TrainerResponse(
-            trainer.getId(),
-            trainer.getFirstName(),
-            trainer.getLastName(),
-            trainer.getEmail()
-    );
-}
+        // Never return the password hash.
+        return new TrainerResponse(
+                trainer.getId(),
+                trainer.getFirstName(),
+                trainer.getLastName(),
+                trainer.getEmail());
+    }
 }
