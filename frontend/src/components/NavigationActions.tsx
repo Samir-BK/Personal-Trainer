@@ -12,6 +12,8 @@ export function NavigationActions() {
   // This controls visibility only; ProtectedRoute handles session checks.
   if (location.pathname === '/login') {
     return null;
+  } else if (location.pathname === "/register") {
+    return null;
   }
 
   return (
