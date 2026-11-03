@@ -1,4 +1,8 @@
 import React, { useState } from "react";
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import { authService } from '../services/authService';
+
 import {
     Alert,
     Box,
@@ -21,8 +25,11 @@ export function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
+    // Navigate to another React route after successful authentication.
+    const navigate = useNavigate();
+
     // Handle the form submission without reloading the browser page
-    const handleLogin = (event: React.SubmitEvent<HTMLFormElement>) => {
+    const handleLogin = async (event: React.SubmitEvent<HTMLFormElement>) => {
         event.preventDefault();
         // Basic frontend validation.
         // The backend will still validate all credentials independently.
@@ -34,13 +41,33 @@ export function LoginPage() {
 
         //Clean previous error before submiting
         setError("");
+        try {
+            // the authentication service first retrives a CSRF token,
+            // then submit the credentials to springboot
+            await authService.login({
+                email: email.trim(),
+                password: password
+            })
 
-        // API integration comes in the next step.
-        // This temporary state lets us test the interface first.
-        setLoading(true);
-        setLoading(false);
+            // Confirm that the browser's session is authenticated.
+            // This also checks that the session cookie works through Vite.
+            await authService.getCurrentTrainer();
+
+            // Move to customer page after successfull authentication
+            navigate("/customers", { replace: true })
+        } catch (error: unknown) {
+            // Invalid credentials return HTTP 401 from Spring Boot.
+            // Other failures may indicate a network or server problem.
+            if (axios.isAxiosError(error) && error.response?.status === 401) {
+                setError("Invalid email or password.");
+            } else {
+                setError('Login failed. Check that the backend is running and try again.');
+            }
+        } finally {
+            // Restore the button regardless of whether login succeeded.
+            setLoading(false);
+        }
     }
-
     return (
         <Box
             sx={{
@@ -112,4 +139,5 @@ export function LoginPage() {
             </Paper>
         </Box>
     );
-};
+}
+
