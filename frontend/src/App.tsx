@@ -11,6 +11,7 @@ import type { ComponentType } from 'react';
 
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { NavigationActions } from './components/NavigationActions';
+import { RegisterPage } from './pages/RegisterPage';
 
 const LoginPageComponent = LoginPage as unknown as ComponentType;
 
@@ -40,8 +41,10 @@ export function App() {
       <Container sx={{ mt: 2 }}>
         {/* Routes renders only the first Route whose path matches the current URL */}
         <Routes>
+          {/* Public pages: trainers do not need a session to access these. */}
           {/* Trainer login page */}
           <Route path="/login" element={<LoginPageComponent />} />
+          <Route path="/register" element={<RegisterPage />} />
           {/* All nested routes require an authenticated trainer session. */}
           <Route element={<ProtectedRoute />}>
             {/* Home page: shows the customer list by default */}
