@@ -1,10 +1,10 @@
 name: CI
 
 on:
-    push:
-        branches: [main]
-    pull_request:
-        branches: [main]
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   backend:
@@ -64,3 +64,39 @@ jobs:
         # ./mvnw = Maven wrapper from the repo (same Maven version everywhere)
         # --batch-mode = cleaner logs, no progress bars
         run: ./mvnw --batch-mode test
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        # Every "run:" step starts in frontend/, so no need for "cd frontend"
+        working-directory: frontend
+
+    steps:
+      # Download the repo code onto the runner (it starts empty)
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Install Node.js 22 (LTS)
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          # Cache downloaded npm dependencies so later runs are faster
+          cache: npm
+          # Refresh the cache only when package-lock.json changes
+          cache-dependency-path: frontend/package-lock.json
+
+      # Install frontend dependencies
+      - name: Install dependencies
+        run: npm ci
+
+      # Run the linter to catch issues early
+      - name: Run ESLint
+        run: npm run lint
+
+      # Build the frontend to confirm it compiles properly
+      - name: Build frontend
+        run: npm run build
