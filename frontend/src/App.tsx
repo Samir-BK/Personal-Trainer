@@ -7,6 +7,9 @@ import { CustomerList } from './pages/CustomerList';
 import { TrainingList } from './pages/TrainingList';
 
 import { LoginPage } from './pages/LoginPage';
+import type { ComponentType } from 'react';
+
+const LoginPageComponent = LoginPage as unknown as ComponentType;
 
 // Root component of the application
 export function App() {
@@ -38,7 +41,7 @@ export function App() {
         {/* Routes renders only the first Route whose path matches the current URL */}
         <Routes>
           {/* Trainer login page */}
-          <Route path="/login" element={<LoginPage />} />
+          <Route path="/login" element={<LoginPageComponent />} />
           {/* Home page: shows the customer list by default */}
           <Route path='/' element={<CustomerList />} />
           {/* Customers page */}
