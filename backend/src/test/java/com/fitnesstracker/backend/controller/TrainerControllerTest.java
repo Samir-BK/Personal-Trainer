@@ -25,6 +25,8 @@ import org.springframework.mock.web.MockHttpSession;
 // MockMvcResultMatchers.status().isCreated().
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+// Adds a valid CSRF token to MockMvc requests that modify server state.
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 
 @SpringBootTest
 // Loads the real Spring Boot application context, including our
@@ -63,6 +65,7 @@ class TrainerControllerTest {
         // Act: simulate POST /api/trainers/register.
         mockMvc.perform(
                 post("/api/trainers/register")
+                        .with(csrf())
                         // Tell Spring that the request body contains JSON.
                         .contentType(MediaType.APPLICATION_JSON)
 
@@ -99,6 +102,7 @@ class TrainerControllerTest {
         // Act: send the invalid registration request.
         mockMvc.perform(
                 post("/api/trainers/register")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
 
@@ -133,6 +137,7 @@ class TrainerControllerTest {
         // The trainer is saved through the real service and repository.
         mockMvc.perform(
                 post("/api/trainers/register")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
                 .andExpect(status().isCreated());
@@ -142,6 +147,7 @@ class TrainerControllerTest {
         // GlobalExceptionHandler converts it to HTTP 409 Conflict.
         mockMvc.perform(
                 post("/api/trainers/register")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
                 .andExpect(status().isConflict())
@@ -171,6 +177,7 @@ class TrainerControllerTest {
         // Save the session created by Spring Security.
         MockHttpSession session = (MockHttpSession) mockMvc.perform(
                 post("/api/trainers/login")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(loginRequest)))
                 .andExpect(status().isOk())
@@ -216,6 +223,7 @@ class TrainerControllerTest {
 
         MockHttpSession session = (MockHttpSession) mockMvc.perform(
                 post("/api/trainers/login")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(loginRequest)))
                 .andExpect(status().isOk())
@@ -226,14 +234,19 @@ class TrainerControllerTest {
         mockMvc.perform(get("/api/trainers/me").session(session))
                 .andExpect(status().isOk());
 
-        // Act: log out using the same authenticated session.
-        mockMvc.perform(get("/api/trainers/logout").session(session))
+        // Act: log out using the authenticated session.
+        // Spring Security requires POST for logout when CSRF is enabled.
+        // Include a valid CSRF token because logout changes session state.
+        mockMvc.perform(post("/api/trainers/logout")
+                .session(session)
+                .with(csrf()))
                 .andExpect(status().isNoContent());
 
-        // Assert: the old session must no longer grant access.
-        // MockHttpSession may reject reuse after invalidation, so create
-        // a fresh request without authentication to verify access is denied.
-        mockMvc.perform(get("/api/trainers/me").session(session))
+        // Spring Security must invalidate the authenticated session.
+        assertTrue(session.isInvalid());
+
+        // A new request without an authenticated session must be rejected.
+        mockMvc.perform(get("/api/trainers/me"))
                 .andExpect(status().isUnauthorized());
 
         // Spring Security must invalidate the session during logout.
