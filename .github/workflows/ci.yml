@@ -1,0 +1,66 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+
+    # Extra containers that run next to the job (here: a test database)
+    services:
+      postgres:
+        # Same Postgres version as local development
+        image: postgres:17
+        # Creates the database and user on startup (same names as local setup)
+        env:
+          POSTGRES_DB: trainer_db
+          POSTGRES_USER: trainer
+          # Throwaway password, fine because the DB only lives for this run
+          POSTGRES_PASSWORD: ci_test_password
+        # runner port 5433 -> container port 5432
+        # 5433 matches the port the app uses locally
+        ports:
+          - 5433:5432
+        # Health check: GitHub waits until Postgres is ready before running steps,
+        # so tests don't start against a database that is still booting
+        options: >-
+          --health-cmd "pg_isready -U trainer -d trainer_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        # Every "run:" step starts in backend/, so no need for "cd backend"
+        working-directory: backend
+
+    steps:
+      # Download the repo code onto the runner (it starts empty)
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Install Java 21 (Temurin build)
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          # Cache downloaded Maven dependencies so later runs are faster
+          cache: maven
+          # Refresh the cache only when pom.xml changes
+          cache-dependency-path: backend/pom.xml
+
+      # Run the actual tests
+      - name: Run backend tests
+        env:
+          # Spring reads this env var for the DB password
+          # Must match POSTGRES_PASSWORD above
+          DB_PASSWORD: ci_test_password
+        # ./mvnw = Maven wrapper from the repo (same Maven version everywhere)
+        # --batch-mode = cleaner logs, no progress bars
+        run: ./mvnw --batch-mode test
