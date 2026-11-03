@@ -1,7 +1,7 @@
 // Routing components from React Router
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route} from 'react-router-dom';
 // Material UI components for layout and styling
-import { AppBar, Toolbar, Typography, Button, Container } from '@mui/material';
+import { AppBar, Toolbar, Typography, Container } from '@mui/material';
 // Page components, one for each route
 import { CustomerList } from './pages/CustomerList';
 import { TrainingList } from './pages/TrainingList';
@@ -10,6 +10,7 @@ import { LoginPage } from './pages/LoginPage';
 import type { ComponentType } from 'react';
 
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { NavigationActions } from './components/NavigationActions';
 
 const LoginPageComponent = LoginPage as unknown as ComponentType;
 
@@ -29,11 +30,8 @@ export function App() {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Personal Trainer Management
           </Typography>
-          {/* Navigation Buttons linked to React Router paths */}
-          {/* component={Link} renders the MUI Button as a router Link,
-              so clicking navigates without reloading the page */}
-          <Button color='inherit' component={Link} to="/customers">Customers</Button>
-          <Button color='inherit' component={Link} to="/trainings">Trainings</Button>
+          {/* Navigation actions are managed by a separate component. */}
+          <NavigationActions />
         </Toolbar>
       </AppBar>
 
@@ -46,12 +44,12 @@ export function App() {
           <Route path="/login" element={<LoginPageComponent />} />
           {/* All nested routes require an authenticated trainer session. */}
           <Route element={<ProtectedRoute />}>
-          {/* Home page: shows the customer list by default */}
-          <Route path='/' element={<CustomerList />} />
-          {/* Customers page */}
-          <Route path='/customers' element={<CustomerList />} />
-          {/* Trainings page */}
-          <Route path='/trainings' element={<TrainingList />} />
+            {/* Home page: shows the customer list by default */}
+            <Route path='/' element={<CustomerList />} />
+            {/* Customers page */}
+            <Route path='/customers' element={<CustomerList />} />
+            {/* Trainings page */}
+            <Route path='/trainings' element={<TrainingList />} />
           </Route>
         </Routes>
       </Container>
