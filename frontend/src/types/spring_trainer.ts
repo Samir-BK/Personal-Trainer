@@ -2,20 +2,20 @@
 // The backend deliberately excludes the password hash.
 export interface Trainer {
     id: number,
-    firstName: String,
-    lastName: String,
-    email: String
+    firstName: string,
+    lastName: string,
+    email: string
 }
 
 // Credentials submitted from the React login form.
 export interface LoginCredentials {
-    email: String,
-    password: String
+    email: string,
+    password: string
 }
 
 export interface RegisterCredentials {
-    firstName: String,
-    lastName: String,
-    email: String,
-    password: String
+    firstName: string,
+    lastName: string,
+    email: string,
+    password: string
 }
