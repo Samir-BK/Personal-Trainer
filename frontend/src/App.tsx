@@ -9,6 +9,8 @@ import { TrainingList } from './pages/TrainingList';
 import { LoginPage } from './pages/LoginPage';
 import type { ComponentType } from 'react';
 
+import { ProtectedRoute } from './components/ProtectedRoute';
+
 const LoginPageComponent = LoginPage as unknown as ComponentType;
 
 // Root component of the application
@@ -42,12 +44,15 @@ export function App() {
         <Routes>
           {/* Trainer login page */}
           <Route path="/login" element={<LoginPageComponent />} />
+          {/* All nested routes require an authenticated trainer session. */}
+          <Route element={<ProtectedRoute />}>
           {/* Home page: shows the customer list by default */}
           <Route path='/' element={<CustomerList />} />
           {/* Customers page */}
           <Route path='/customers' element={<CustomerList />} />
           {/* Trainings page */}
           <Route path='/trainings' element={<TrainingList />} />
+          </Route>
         </Routes>
       </Container>
     </BrowserRouter>
