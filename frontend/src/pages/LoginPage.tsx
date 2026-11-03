@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../services/authService';
 
 import {
@@ -136,6 +136,10 @@ export function LoginPage() {
                         {loading ? <CircularProgress size={24} color="inherit" /> : 'Sign in'}
                     </Button>
                 </Box>
+                    <Typography variant="body2" align="center" sx={{ mt: 3 }}>
+                    New User? Register Instead{' '}
+                    <Link to="/register">Register</Link>
+                </Typography>
             </Paper>
         </Box>
     );
