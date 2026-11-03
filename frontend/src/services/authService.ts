@@ -2,29 +2,66 @@ import axios from "axios";
 import type { Trainer } from "../types/spring_trainer";
 import type { LoginCredentials } from "../types/spring_trainer";
 
-// Use a relative /api URL so Vite forwards requests to Spring Boot.
-// In production, the hosting configuration must also route /api
-// requests to the backend. 
-const api = axios.create({
-    baseURL: "/api",
-    // Include the browser's JSESSIONID cookie with requests.
-    // We do not manually read or store the session identifier.
-    withCredentials: true,
+// Structure returned by GET /api/csrf.
+interface CsrfTokenResponse {
+    headerName: string;
+    parameterName: string;
+    token: string;
 }
-);
+
+// The Vite proxy forwards /api requests to Spring Boot.
+// The browser handles the session cookie automatically.
+const api = axios.create({
+    baseURL: '/api',
+    withCredentials: true,
+});
+
+// Retrieve a fresh CSRF token before a request that changes data.
+// Using the token from the JSON response avoids reading cookies manually.
+async function getCsrfToken(): Promise<CsrfTokenResponse> {
+    const response = await api.get<CsrfTokenResponse>('/csrf');
+    return response.data;
+}
 
 export const authService = {
-    // Verify credentials and establish a Spring Security session.
+    // Obtain a CSRF token, then submit credentials.
+    // Spring Security establishes the authenticated session on success.
     async login(credentials: LoginCredentials): Promise<Trainer> {
+        const csrf = await getCsrfToken();
+
         const response = await api.post<Trainer>(
-            "trainers/login",
-            credentials
+            '/trainers/login',
+            credentials,
+            {
+                headers: {
+                    [csrf.headerName]: csrf.token,
+                },
+            }
         );
+
         return response.data;
     },
-    // Invalidate the current authenticated session.
-    // Spring Boot returns HTTP 204 with no response body.
-    async logout(): Promise<void> {
-            await api.post('/trainers/logout');
+
+    // Restore the logged-in trainer after refreshing the browser.
+    // An unauthenticated request returns HTTP 401.
+    async getCurrentTrainer(): Promise<Trainer> {
+        const response = await api.get<Trainer>('/trainers/me');
+        return response.data;
     },
-}
+
+    // Obtain a token for the current session before logging out.
+    // Spring Security invalidates the session and returns HTTP 204.
+    async logout(): Promise<void> {
+        const csrf = await getCsrfToken();
+
+        await api.post(
+            '/trainers/logout',
+            undefined,
+            {
+                headers: {
+                    [csrf.headerName]: csrf.token,
+                },
+            }
+        );
+    },
+};
