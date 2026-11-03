@@ -1,75 +1,165 @@
-# React + TypeScript + Vite
+# Personal Trainer Management — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React and TypeScript application for managing personal training customers, training sessions, and trainer-specific features.
 
-Currently, two official plugins are available:
+The application uses two separate backends:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. **University REST API:** Customer and training data.
+2. **Our Spring Boot REST API:** Trainer accounts, authentication, and planned trainer-specific features.
 
-## React Compiler
+## Technology Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- React 19
+- TypeScript
+- Vite 8
+- Material UI
+- MUI Data Grid
+- React Router 7
+- Axios
+- Day.js
 
-## Expanding the ESLint configuration
+## Current Features
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- Customer list using the university API
+- Training list using the university API
+- Trainer registration
+- Trainer login
+- Trainer logout
+- Protected application routes
+- CSRF-aware authentication requests
+- Navigation between application pages
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Application Routes
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+| Route        | Description         | Access        |
+|--------------|---------------------|---------------|
+| `/login`     | Trainer login       | Public        |
+| `/register`  | Trainer registration | Public       |
+| `/`          | Customer list       | Authenticated |
+| `/customers` | Customer list       | Authenticated |
+| `/trainings` | Training list       | Authenticated |
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+React route protection checks the trainer's session through the Spring Boot `/api/trainers/me` endpoint.
 
+Actual backend authorization is enforced by Spring Security.
+
+## Running Locally
+
+### Prerequisites
+
+- Node.js compatible with Vite 8
+- npm
+- Running Spring Boot backend for authentication
+- Access to the university REST API
+
+### Start the app
+
+From the `frontend` directory:
+
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Open the URL displayed by Vite, normally:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```text
+http://localhost:5173
 ```
+
+## Available Commands
+
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run preview
+```
+
+`npm run build` runs TypeScript checks and creates a production build in `dist/`.
+
+## API Integration
+
+### Spring Boot API
+
+Authentication requests use relative `/api` URLs.
+
+During local development, the Vite proxy forwards these requests to:
+
+```text
+http://localhost:8080
+```
+
+The frontend retrieves CSRF tokens before authentication-related POST requests. Session cookies are handled by the browser rather than stored in localStorage.
+
+### University REST API
+
+Customer and training records come from:
+
+```text
+https://customerrestservice-personaltraining.rahtiapp.fi/api
+```
+
+The API returns HAL-style JSON containing `_embedded` collections and `_links` for related resources.
+
+The university API remains the source of truth for customer details and training sessions.
+
+## Planned Features
+
+- Customer create, edit, and delete functionality using the university API
+- Training create, edit, and delete functionality using the university API
+- Trainer–customer assignment interface
+- Customer fitness goals
+- Individual training session notes
+- Customer progress and training statistics
+
+The assignment, goal, and note features will communicate with our Spring Boot backend.
+
+## Project Structure
+
+```text
+src/
+├── components/
+│   ├── LogoutButton.tsx
+│   ├── NavigationActions.tsx
+│   └── ProtectedRoute.tsx
+├── pages/
+│   ├── CustomerList.tsx
+│   ├── TrainingList.tsx
+│   ├── LoginPage.tsx
+│   └── RegisterPage.tsx
+├── services/
+│   ├── authService.ts
+│   └── trainerService.ts
+├── types/
+├── App.tsx
+└── main.tsx
+```
+
+## Security Notes
+
+- The frontend never stores trainer passwords or session IDs in localStorage.
+- Authentication uses server-side sessions.
+- State-changing requests to Spring Boot require CSRF protection.
+- React route guards improve navigation but do not replace backend authorization.
+- Trainer-specific records must be restricted to the authenticated trainer.
+
+## DevOps Status
+
+**Currently available:**
+
+- npm production build
+- ESLint command
+- Local Vite development server
+- Development proxy for Spring Boot
+- Git version control
+
+**Planned:**
+
+- GitHub Actions build and lint checks
+- Production hosting configuration
+- HTTPS
+- Production API routing
+- Deployment verification
+
+> **Note:** The Vite development proxy does not automatically apply to production hosting.
