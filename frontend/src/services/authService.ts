@@ -1,7 +1,5 @@
 import axios from "axios";
-import type { Trainer } from "../types/spring_trainer";
-import type { LoginCredentials } from "../types/spring_trainer";
-
+import type { Trainer, LoginCredentials, RegisterCredentials } from "../types/spring_trainer";
 // Structure returned by GET /api/csrf.
 interface CsrfTokenResponse {
     headerName: string;
@@ -49,6 +47,25 @@ export const authService = {
         return response.data;
     },
 
+    // Register a new trainer account in PostgreSQL.
+    // Registration is public, but Spring Security still requires a CSRF token.
+    async register(credentials: RegisterCredentials): Promise<Trainer> {
+        const csrf = await getCsrfToken();
+
+        const response = await api.post<Trainer>(
+            '/trainers/register',
+            credentials,
+            {
+                headers: {
+                    [csrf.headerName]: csrf.token,
+                },
+            }
+        );
+
+        // The backend returns HTTP 201 and the newly created trainer.
+        // Registration does not automatically log the trainer in.
+        return response.data;
+    },
     // Obtain a token for the current session before logging out.
     // Spring Security invalidates the session and returns HTTP 204.
     async logout(): Promise<void> {
