@@ -12,3 +12,10 @@ export interface LoginCredentials {
     email: String,
     password: String
 }
+
+export interface RegisterCredentials {
+    firstName: String,
+    lastName: String,
+    email: String,
+    password: String
+}
