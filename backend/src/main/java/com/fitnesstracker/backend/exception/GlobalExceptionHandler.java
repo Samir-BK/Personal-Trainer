@@ -5,9 +5,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.http.HttpStatus;
 import com.fitnesstracker.backend.exception.InvalidCredentialsException;
 
 import java.util.HashMap;
@@ -52,6 +49,18 @@ public class GlobalExceptionHandler {
         // to avoid revealing which trainer accounts exist.
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("error", exception.getMessage()));
+    }
+
+    // Convert trainer-customer business errors into meaningful HTTP responses.
+    // Examples: 400 invalid ID, 404 missing customer, 409 duplicate assignment,
+    // and 503 when the university API is unavailable.
+    @ExceptionHandler(TrainerCustomerException.class)
+    public ResponseEntity<Map<String, String>> handleTrainerCustomerException(
+            TrainerCustomerException exception) {
+
+        return ResponseEntity
+                .status(exception.getStatus())
                 .body(Map.of("error", exception.getMessage()));
     }
 }
