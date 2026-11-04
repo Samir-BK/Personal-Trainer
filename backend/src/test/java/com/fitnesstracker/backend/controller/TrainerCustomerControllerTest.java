@@ -19,6 +19,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.UUID;
@@ -62,8 +63,7 @@ class TrainerCustomerControllerTest {
                 "Test",
                 "Trainer",
                 UUID.randomUUID() + "@example.com",
-                "test-password-hash"
-        ));
+                "test-password-hash"));
     }
 
     // Simulate the same authentication principal used by TrainerController.
@@ -72,8 +72,7 @@ class TrainerCustomerControllerTest {
         return UsernamePasswordAuthenticationToken.authenticated(
                 trainer.getId(),
                 null,
-                List.of(new SimpleGrantedAuthority("ROLE_TRAINER"))
-        );
+                List.of(new SimpleGrantedAuthority("ROLE_TRAINER")));
     }
 
     // Insert an assignment directly for tests that need existing data.
@@ -82,8 +81,7 @@ class TrainerCustomerControllerTest {
             Long universityCustomerId) {
 
         return trainerCustomerRepository.save(
-                new TrainerCustomer(trainer, universityCustomerId)
-        );
+                new TrainerCustomer(trainer, universityCustomerId));
     }
 
     @Test
@@ -102,9 +100,9 @@ class TrainerCustomerControllerTest {
         // Authentication alone is insufficient for POST requests.
         // A valid CSRF token is also required.
         mockMvc.perform(post("/api/trainer-customers")
-                        .with(authentication(trainerAuthentication(trainer)))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"universityCustomerId\":1002}"))
+                .with(authentication(trainerAuthentication(trainer)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"universityCustomerId\":1002}"))
                 .andExpect(status().isForbidden());
     }
 
@@ -118,10 +116,10 @@ class TrainerCustomerControllerTest {
                 .thenReturn(true);
 
         mockMvc.perform(post("/api/trainer-customers")
-                        .with(authentication(trainerAuthentication(trainer)))
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"universityCustomerId\":1002}"))
+                .with(authentication(trainerAuthentication(trainer)))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"universityCustomerId\":1002}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.universityCustomerId").value(1002))
@@ -141,10 +139,10 @@ class TrainerCustomerControllerTest {
 
         // A second assignment of the same customer must return 409.
         mockMvc.perform(post("/api/trainer-customers")
-                        .with(authentication(trainerAuthentication(trainer)))
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"universityCustomerId\":1002}"))
+                .with(authentication(trainerAuthentication(trainer)))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"universityCustomerId\":1002}"))
                 .andExpect(status().isConflict());
     }
 
@@ -158,10 +156,10 @@ class TrainerCustomerControllerTest {
                 .thenReturn(false);
 
         mockMvc.perform(post("/api/trainer-customers")
-                        .with(authentication(trainerAuthentication(trainer)))
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"universityCustomerId\":999999}"))
+                .with(authentication(trainerAuthentication(trainer)))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"universityCustomerId\":999999}"))
                 .andExpect(status().isNotFound());
     }
 
@@ -176,7 +174,7 @@ class TrainerCustomerControllerTest {
 
         // Trainer A must see only their own customer assignment.
         mockMvc.perform(get("/api/trainer-customers")
-                        .with(authentication(trainerAuthentication(trainerA))))
+                .with(authentication(trainerAuthentication(trainerA))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].universityCustomerId").value(1002));
@@ -194,8 +192,8 @@ class TrainerCustomerControllerTest {
         // Trainer B cannot retrieve Trainer A's assignment.
         // Return 404 to avoid revealing whether it exists.
         mockMvc.perform(get("/api/trainer-customers/{id}",
-                        assignment.getId())
-                        .with(authentication(trainerAuthentication(trainerB))))
+                assignment.getId())
+                .with(authentication(trainerAuthentication(trainerB))))
                 .andExpect(status().isNotFound());
     }
 
@@ -209,9 +207,9 @@ class TrainerCustomerControllerTest {
         TrainerCustomer assignment = createAssignment(trainerA, 1002L);
 
         mockMvc.perform(delete("/api/trainer-customers/{id}",
-                        assignment.getId())
-                        .with(authentication(trainerAuthentication(trainerB)))
-                        .with(csrf()))
+                assignment.getId())
+                .with(authentication(trainerAuthentication(trainerB)))
+                .with(csrf()))
                 .andExpect(status().isNotFound());
 
         // Ownership rejection must not delete the database record.
@@ -225,12 +223,41 @@ class TrainerCustomerControllerTest {
         TrainerCustomer assignment = createAssignment(trainer, 1002L);
 
         mockMvc.perform(delete("/api/trainer-customers/{id}",
-                        assignment.getId())
-                        .with(authentication(trainerAuthentication(trainer)))
-                        .with(csrf()))
+                assignment.getId())
+                .with(authentication(trainerAuthentication(trainer)))
+                .with(csrf()))
                 .andExpect(status().isNoContent());
 
         // The assignment must actually be removed from PostgreSQL.
         assertFalse(trainerCustomerRepository.existsById(assignment.getId()));
     }
+
+    @Test
+    void shouldReturnServiceUnavailableWhenUniversityApiFails()
+            throws Exception {
+
+        Trainer trainer = createTrainer();
+
+        // Simulate a network failure or an unavailable university API.
+        when(universityCustomerClient.customerExists(1002L))
+                .thenThrow(new IllegalStateException(
+                        "Unable to verify customer with university API"));
+
+        // The backend must return 503, not incorrectly report
+        // that the customer does not exist.
+        mockMvc.perform(post("/api/trainer-customers")
+                .with(authentication(trainerAuthentication(trainer)))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"universityCustomerId\":1002}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.error")
+                        .value("University customer service is unavailable"));
+
+        // A failed external validation must never create an assignment.
+        assertFalse(trainerCustomerRepository
+                .existsByTrainer_IdAndUniversityCustomerId(
+                        trainer.getId(), 1002L));
+    }
+
 }
