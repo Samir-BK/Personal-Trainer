@@ -13,15 +13,12 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import org.hibernate.annotations.Generated;
 
 @Entity // Entity tells JPA that this class maps to a database table
-@Table(
-        name = "trainer_customer",
-        uniqueConstraints = @UniqueConstraint( // Unique constraints limit assgining one customer and one trainer only at once
-                name = "uq_trainer_customer",
-                columnNames = {"trainer_id", "university_customer_id"}
-        )
-)
+@Table(name = "trainer_customer", uniqueConstraints = @UniqueConstraint( // Unique constraints limit assgining one
+                                                                         // customer and one trainer only at once
+        name = "uq_trainer_customer", columnNames = { "trainer_id", "university_customer_id" }))
 public class TrainerCustomer {
 
     @Id
@@ -31,7 +28,8 @@ public class TrainerCustomer {
     // Each assignment belongs to one trainer in our database.
     // LAZY prevents unnecessary trainer queries when loading assignments.
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "trainer_id", nullable = false) // the trainer_id column in this table is the foreign key to the trainer table.
+    @JoinColumn(name = "trainer_id", nullable = false) // the trainer_id column in this table is the foreign key to the
+                                                       // trainer table.
     private Trainer trainer;
 
     // Customer IDs come from the university REST API.
@@ -39,14 +37,11 @@ public class TrainerCustomer {
     @Column(name = "university_customer_id", nullable = false)
     private Long universityCustomerId;
 
-    // PostgreSQL sets this value using DEFAULT CURRENT_TIMESTAMP.
-    // The application reads it but does not insert or update it.
-    @Column(
-            name = "assigned_at",
-            nullable = false,
-            insertable = false,
-            updatable = false
-    )
+    // PostgreSQL generates the timestamp using DEFAULT CURRENT_TIMESTAMP.
+    // Hibernate retrieves the generated value after INSERT, so the API
+    // response can include assignedAt immediately after saving.
+    @Generated
+    @Column(name = "assigned_at", nullable = false, insertable = false, updatable = false)
     private Instant assignedAt;
 
     protected TrainerCustomer() {
