@@ -11,6 +11,7 @@ import com.fitnesstracker.backend.model.TrainerCustomer;
 import com.fitnesstracker.backend.repository.TrainerRepository;
 import com.fitnesstracker.backend.repository.TrainerCustomerRepository;
 import org.springframework.http.HttpStatus;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import com.fitnesstracker.backend.exception.TrainerCustomerException;
 
@@ -85,7 +86,22 @@ public class TrainerCustomerService {
         // constraint even if concurrent requests pass the duplicate check.
         TrainerCustomer assignment = new TrainerCustomer(trainer, universityCustomerId);
 
-        return trainerCustomerRepository.save(assignment);
+        // this needed when two request arriving simultaneously
+        try {
+            // Force Hibernate to execute the INSERT immediately.
+            // This allows us to catch PostgreSQL's unique constraint violation
+            // here instead of waiting until a later transaction flush.
+            return trainerCustomerRepository.saveAndFlush(assignment);
+
+        } catch (DataIntegrityViolationException exception) {
+
+            // The database is the final authority on uniqueness.
+            // This handles concurrent requests that passed the earlier
+            // existsByTrainer_IdAndUniversityCustomerId() check.
+            throw new TrainerCustomerException(
+                    HttpStatus.CONFLICT,
+                    "Customer is already assigned to this trainer");
+        }
     }
 
     @Transactional(readOnly = true)
