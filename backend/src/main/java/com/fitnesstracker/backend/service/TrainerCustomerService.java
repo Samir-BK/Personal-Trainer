@@ -88,6 +88,20 @@ public class TrainerCustomerService {
         return trainerCustomerRepository.save(assignment);
     }
 
+    @Transactional(readOnly = true)
+    public List<TrainerCustomer> getAssignmentsForTrainer(Long trainerId) {
+
+        // Keep authorization checks in the service so all trainer-scoped
+        // reads go through the same validation path.
+        if (trainerId == null || trainerId <= 0) {
+            throw new TrainerCustomerException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid trainer ID");
+        }
+
+        return trainerCustomerRepository.findByTrainer_Id(trainerId);
+    }
+
     @Transactional
     public void removeAssignment(
             Long trainerId,
