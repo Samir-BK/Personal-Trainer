@@ -14,10 +14,10 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
-@Entity
+@Entity // Entity tells JPA that this class maps to a database table
 @Table(
         name = "trainer_customer",
-        uniqueConstraints = @UniqueConstraint(
+        uniqueConstraints = @UniqueConstraint( // Unique constraints limit assgining one customer and one trainer only at once
                 name = "uq_trainer_customer",
                 columnNames = {"trainer_id", "university_customer_id"}
         )
@@ -31,7 +31,7 @@ public class TrainerCustomer {
     // Each assignment belongs to one trainer in our database.
     // LAZY prevents unnecessary trainer queries when loading assignments.
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "trainer_id", nullable = false)
+    @JoinColumn(name = "trainer_id", nullable = false) // the trainer_id column in this table is the foreign key to the trainer table.
     private Trainer trainer;
 
     // Customer IDs come from the university REST API.
