@@ -220,7 +220,7 @@ erDiagram
 flowchart LR
     TR[trainer.id] -->|one trainer can have many| ASSIGN[trainer_customer.trainer_id]
     ASSIGN2[trainer_customer.id] -->|one assignment can have many| GOAL[customer_goal.trainer_customer_id]
-    EXTERNAL[University customers/{id}] -.->|referenced by ID only; no local FK| CID[trainer_customer.university_customer_id]
+EXTERNAL["University customers/{id}"] -.->|referenced by ID only; no local FK| CID[trainer_customer.university_customer_id]
 ```
 
 **Important consequences:**
