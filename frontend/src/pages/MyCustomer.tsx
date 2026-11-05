@@ -192,6 +192,31 @@ export const MyCustomers = () => {
             valueFormatter: (value: string | null | undefined) =>
                 value ? new Date(value).toLocaleDateString() : "—",
         },
+
+        {
+            field: "goals",
+            headerName: "Fitness Goals",
+            width: 160,
+            sortable: false,
+            filterable: false,
+
+            // Each button opens the goals belonging to this specific
+            // trainer-customer assignment.
+            //
+            // Use assignmentId, NOT universityCustomerId.
+            // The backend verifies that the logged-in trainer owns it.
+            renderCell: (params) => (
+                <Button
+                    component={RouterLink}
+                    to={`/my-customers/${params.row.assignmentId}/goals`}
+                    variant="contained"
+                    size="small"
+                >
+                    Manage Goals
+                </Button>
+            ),
+        },
+
     ];
 
     return (
