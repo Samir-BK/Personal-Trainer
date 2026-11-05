@@ -75,28 +75,53 @@ export const fetchCustomersByURL = async (
     url: string
 ): Promise<Customer> => {
 
-    // Parse the HAL link to extract its URL pathname.
-    // A valid customer link ends in /customers/{id}.
-    const pathname = new URL(url, API_BASE_URL.startsWith("http")
-        ? API_BASE_URL
-        : window.location.origin).pathname;
+    // Convert the absolute HAL link into a URL object.
+    // The university API should return an HTTP or HTTPS link.
+    const parsedUrl = new URL(url);
 
-    // Extract the numeric university customer ID.
-    const match = pathname.match(/\/customers\/(\d+)\/?$/);
-
-    // Reject unexpected HAL links rather than issuing
-    // requests to invalid or unrelated API endpoints.
-    if (!match) {
-        throw new Error("Invalid university customer link.");
+    // Reject unsupported URL protocols.
+    if (
+        parsedUrl.protocol !== "https:" &&
+        parsedUrl.protocol !== "http:"
+    ) {
+        throw new Error("Unsupported university customer URL.");
     }
 
-    const customerId = match[1];
+    // Extract the resource path after the university /api/ prefix.
+    // This preserves the actual HAL relationship endpoint.
+    const apiPathIndex = parsedUrl.pathname.indexOf("/api/");
 
-    // Use the same configured API base URL as the other requests.
-    // In production, Vercel forwards this to the university server.
-    const response = await client.get<Customer>(
-        `customers/${customerId}`
+    if (apiPathIndex === -1) {
+        throw new Error("Invalid university API link.");
+    }
+
+    const resourcePath = parsedUrl.pathname.substring(
+        apiPathIndex + "/api/".length
     );
 
+    // Accept only the customer-related URL structures expected
+    // from the university training service.
+    // This avoids forwarding unrelated or unexpected resources.
+    const isDirectCustomer =
+        /^customers\/\d+\/?$/.test(resourcePath);
+
+    const isTrainingCustomer =
+        /^trainings\/\d+\/customer\/?$/.test(resourcePath);
+
+    if (!isDirectCustomer && !isTrainingCustomer) {
+        throw new Error(
+            `Unexpected university customer resource: ${resourcePath}`
+        );
+    }
+
+    // Use the configured university API client.
+    // Locally:
+    // VITE_TRAINER_API points to the university API.
+    // On Vercel:
+    // VITE_TRAINER_API=/university-api/
+    // The browser never needs to request the absolute HAL URL.
+    const response = await client.get<Customer>(resourcePath);
+
+    // Return the customer information to TrainingList.tsx.
     return response.data;
 };
