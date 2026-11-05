@@ -70,6 +70,10 @@ export const CustomerGoals = () => {
     // Track initial loading and form submission separately.
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    // Tracks whether the initial goal request failed.
+    // If access is denied or the assignment does not exist,
+    // the page must not display the goal editor.
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     // Store the current goal form values.
     const [form, setForm] = useState<GoalForm>(emptyForm);
@@ -91,28 +95,46 @@ export const CustomerGoals = () => {
         let active = true;
 
         async function loadGoals() {
-            // Reject invalid URL parameters before calling the backend.
+            // A valid assignment ID must be a positive integer.
+            // Reject invalid URL parameters without contacting Spring Boot.
             if (!Number.isSafeInteger(assignmentId) || assignmentId <= 0) {
-                setMessage("Invalid customer assignment ID.");
-                setMessageType("error");
-                setLoading(false);
+                if (active) {
+                    setLoadError("Invalid customer assignment ID.");
+                    setLoading(false);
+                }
                 return;
             }
 
+            // Reset the loading state when navigating to another assignment.
             setLoading(true);
+            setLoadError(null);
 
             try {
-                // The backend verifies that this assignment belongs
-                // to the currently authenticated trainer.
+                // Spring Boot verifies that the assignment belongs
+                // to the authenticated trainer before returning goals.
                 const data = await getCustomerGoals(assignmentId);
 
                 if (active) {
                     setGoals(data);
+                    setLoadError(null);
                 }
             } catch (error) {
                 if (active) {
-                    setMessage(getErrorMessage(error));
-                    setMessageType("error");
+                    // Clear previously loaded goals to avoid displaying
+                    // another customer's information after navigation.
+                    setGoals([]);
+
+                    if (
+                        axios.isAxiosError(error) &&
+                        (error.response?.status === 403 ||
+                            error.response?.status === 404)
+                    ) {
+                        setLoadError(
+                            "This customer assignment does not exist or you do not have access."
+                        );
+                    } else {
+                        setLoadError(getErrorMessage(error));
+                    }
                 }
             } finally {
                 if (active) {
@@ -332,9 +354,16 @@ export const CustomerGoals = () => {
 
             {/* Do not display the editor until initial loading is complete. */}
             {loading ? (
+                // Display a spinner while checking assignment access.
                 <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
                     <CircularProgress />
                 </Box>
+            ) : loadError ? (
+                // Do not render the editor when loading fails.
+                // The trainer can return to their own customer list.
+                <Alert severity="error" sx={{ mb: 3 }}>
+                    {loadError}
+                </Alert>
             ) : (
                 <>
                     {/* Form for creating or editing a fitness goal. */}
