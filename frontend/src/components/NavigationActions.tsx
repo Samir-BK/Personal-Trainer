@@ -22,6 +22,11 @@ export function NavigationActions() {
       <Button color="inherit" component={Link} to="/customers">
         Customers
       </Button>
+      
+      {/* Navigate without reloading the browser page. */}
+      <Button color="inherit" component={Link} to="/my-customers">
+        My Customers
+      </Button>
 
       <Button color="inherit" component={Link} to="/trainings">
         Trainings
