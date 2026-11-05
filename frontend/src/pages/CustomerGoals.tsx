@@ -8,12 +8,6 @@ import {
     Box,
     Button,
     CircularProgress,
-    Container,
-    MenuItem,
-    Paper,
-    Stack,
-    TextField,
-    Typography,
     Chip,
     Dialog,
     DialogActions,
@@ -21,6 +15,11 @@ import {
     DialogContentText,
     DialogTitle,
     Divider,
+    MenuItem,
+    Paper,
+    Stack,
+    TextField,
+    Typography,
 } from "@mui/material";
 
 import {
@@ -91,9 +90,8 @@ export const CustomerGoals = () => {
     // Track which goal currently has an update or delete in progress.
     const [busyGoalId, setBusyGoalId] = useState<number | null>(null);
 
-    // Stores the goal selected for deletion.
-    // null means the confirmation dialog is closed.
-    // Keeping the selected goal in state allows the dialog to display its title.
+    // Store the goal awaiting deletion. A null value closes the dialog.
+    // Deletion is never triggered merely by clicking a goal's Delete button.
     const [goalToDelete, setGoalToDelete] = useState<CustomerGoal | null>(null);
 
     // Feedback messages shown after actions or errors.
@@ -301,119 +299,86 @@ export const CustomerGoals = () => {
         }
     }
 
-
-    // Open the confirmation dialog without immediately deleting anything.
-    // The trainer must confirm the action before we contact Spring Boot.
+    // Select a goal to delete; the confirmation dialog opens without an API call.
     function openDeleteDialog(goal: CustomerGoal) {
         setGoalToDelete(goal);
     }
 
-    // Close the dialog without deleting the selected goal.
+    // Cancel deletion unless an actual DELETE request is still pending.
     function closeDeleteDialog() {
-        // Prevent closing while the DELETE request is running.
-        if (busyGoalId !== null) {
-            return;
-        }
-
+        if (busyGoalId !== null) return;
         setGoalToDelete(null);
     }
 
-    // Permanently delete the selected goal after confirmation.
+    // Delete only after explicit confirmation in the Material UI dialog.
     async function handleDelete() {
-        // Nothing to delete if no goal has been selected.
-        if (goalToDelete === null || busyGoalId !== null) {
-            return;
-        }
+        if (goalToDelete === null || busyGoalId !== null) return;
 
-        // Store the selected goal locally before the asynchronous request.
+        // Capture the selected goal before starting the asynchronous request.
         const goal = goalToDelete;
-
         setBusyGoalId(goal.id);
         setMessage("");
 
         try {
-            // Spring Boot verifies trainer ownership before deleting.
+            // Spring Boot independently validates trainer ownership.
             await deleteCustomerGoal(assignmentId, goal.id);
 
-            // Remove the deleted goal from the displayed list.
+            // Immediately remove the deleted goal from the displayed list.
             setGoals((previous) =>
                 previous.filter((item) => item.id !== goal.id)
             );
 
-            // Clear the edit form if the deleted goal was being edited.
-            if (editingGoalId === goal.id) {
-                resetForm();
-            }
+            // Prevent the editor from referencing a goal that no longer exists.
+            if (editingGoalId === goal.id) resetForm();
 
-            // Close the dialog and show successful feedback.
             setGoalToDelete(null);
             setMessage("Goal deleted successfully.");
             setMessageType("success");
-
         } catch (error) {
-            // Keep the dialog open if deletion fails.
+            // Keep the dialog open so the trainer can retry or cancel.
             setMessage(getErrorMessage(error));
             setMessageType("error");
-
         } finally {
             setBusyGoalId(null);
         }
     }
 
-
     return (
-
-        <Container maxWidth="lg" sx={{ mt: 2, mb: 6 }}>
-
-            {/* Page heading with the green fitness branding.
-        Keep the heading separate from the goal creation form
-        so trainers can easily identify the current workspace. */}
-            <Box sx={{ mb: 4 }}>
-
-                {/* Small section label above the main heading. */}
+        // App.tsx already supplies the outer Container; this limits the
+        // goal workspace without introducing a second nested Container.
+        <Box sx={{ maxWidth: 1100, mx: "auto", pb: 6 }}>
+            {/* A clear header separates page navigation from goal editing. */}
+            <Box sx={{ mb: 3 }}>
                 <Typography
                     variant="overline"
-                    sx={{
-                        color: "secondary.main",
-                        fontWeight: 800,
-                        letterSpacing: 2,
-                    }}
+                    sx={{ color: "secondary.main", fontWeight: 800, letterSpacing: 2 }}
                 >
                     CUSTOMER MANAGEMENT
                 </Typography>
-
-                {/* Main heading uses dark forest green from our shared theme. */}
                 <Typography
                     variant="h4"
                     component="h1"
-                    sx={{
-                        color: "secondary.main",
-                        fontWeight: 800,
-                        mb: 1,
-                    }}
+                    sx={{ color: "secondary.main", fontWeight: 800, mb: 1 }}
                 >
                     Fitness Goals
                 </Typography>
-
-                {/* Explain the purpose of the goal-management page. */}
                 <Typography color="text.secondary">
-                    Set meaningful fitness targets, update goals,
-                    and manage their progress.
+                    Set fitness targets and manage each goal's status.
                 </Typography>
             </Box>
 
-
-            {/* Return to the list of assigned customers. */}
+            {/* Return to the logged-in trainer's assigned customers. */}
             <Button
                 component={RouterLink}
                 to="/my-customers"
                 variant="outlined"
+                color="secondary"
                 sx={{ mb: 3 }}
             >
                 Back to My Customers
             </Button>
 
-            {/* Show feedback from backend requests. */}
+            {/* Show success or error messages from the API operations. */}
             {message && (
                 <Alert
                     severity={messageType}
@@ -424,23 +389,19 @@ export const CustomerGoals = () => {
                 </Alert>
             )}
 
-            {/* Do not display the editor until initial loading is complete. */}
+            {/* Do not expose the editor until ownership has been checked. */}
             {loading ? (
-                // Display a spinner while checking assignment access.
-                <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-                    <CircularProgress />
+                <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+                    <CircularProgress aria-label="Loading fitness goals" />
                 </Box>
             ) : loadError ? (
-                // Do not render the editor when loading fails.
-                // The trainer can return to their own customer list.
+                // An invalid or unauthorized assignment never shows its editor.
                 <Alert severity="error" sx={{ mb: 3 }}>
                     {loadError}
                 </Alert>
             ) : (
                 <>
-                    {/* Form for creating or editing a fitness goal. */}
-                    {/* White form card with rounded corners and a subtle green border.
-    This matches the Login and Registration page styling. */}
+                    {/* The same form creates a goal or edits a selected one. */}
                     <Paper
                         elevation={0}
                         sx={{
@@ -452,22 +413,19 @@ export const CustomerGoals = () => {
                             boxShadow: "0 12px 35px rgba(23, 77, 67, 0.06)",
                         }}
                     >
-                        {/* Distinguish editing an existing goal from creating a new one. */}
                         <Typography
                             variant="h6"
-                            sx={{
-                                color: "secondary.main",
-                                fontWeight: 800,
-                                mb: 3,
-                            }}
+                            sx={{ color: "secondary.main", fontWeight: 800, mb: 3 }}
                         >
                             {editingGoalId === null
                                 ? "Create a New Goal"
                                 : "Edit Fitness Goal"}
                         </Typography>
 
+                        {/* Native form semantics enable Enter to submit. */}
                         <Box component="form" onSubmit={handleSubmit}>
-                            <Stack spacing={2}>
+                            <Stack spacing={2.5}>
+                                {/* Backend limits goal titles to 255 characters. */}
                                 <TextField
                                     label="Goal Title"
                                     value={form.title}
@@ -479,64 +437,63 @@ export const CustomerGoals = () => {
                                     fullWidth
                                 />
 
+                                {/* Optional text gives the trainer more context. */}
                                 <TextField
                                     label="Description"
                                     value={form.description}
                                     onChange={(event) =>
-                                        updateForm(
-                                            "description",
-                                            event.target.value
-                                        )
+                                        updateForm("description", event.target.value)
                                     }
                                     multiline
                                     minRows={3}
                                     fullWidth
                                 />
 
-                                <TextField
-                                    label="Target Date"
-                                    type="date"
-                                    value={form.targetDate}
-                                    onChange={(event) =>
-                                        updateForm(
-                                            "targetDate",
-                                            event.target.value
-                                        )
-                                    }
-                                    slotProps={{ inputLabel: { shrink: true } }}
-                                    fullWidth
-                                />
+                                {/* Target date and session count are optional.
+                                    On desktop they sit side by side. */}
+                                <Box
+                                    sx={{
+                                        display: "grid",
+                                        gridTemplateColumns: {
+                                            xs: "1fr",
+                                            sm: "repeat(2, minmax(0, 1fr))",
+                                        },
+                                        gap: 2,
+                                    }}
+                                >
+                                    <TextField
+                                        label="Target Date"
+                                        type="date"
+                                        value={form.targetDate}
+                                        onChange={(event) =>
+                                            updateForm("targetDate", event.target.value)
+                                        }
+                                        slotProps={{ inputLabel: { shrink: true } }}
+                                        fullWidth
+                                    />
+                                    <TextField
+                                        label="Target Sessions"
+                                        type="number"
+                                        value={form.targetSessions}
+                                        onChange={(event) =>
+                                            updateForm("targetSessions", event.target.value)
+                                        }
+                                        slotProps={{ htmlInput: { min: 1, step: 1 } }}
+                                        fullWidth
+                                    />
+                                </Box>
 
-                                <TextField
-                                    label="Target Sessions"
-                                    type="number"
-                                    value={form.targetSessions}
-                                    onChange={(event) =>
-                                        updateForm(
-                                            "targetSessions",
-                                            event.target.value
-                                        )
-                                    }
-                                    slotProps={{ htmlInput: { min: 1, step: 1 } }}
-                                    fullWidth
-                                />
-
-                                <Stack direction="row" spacing={2}>
+                                {/* Create / save uses the backend request already
+                                    selected in handleSubmit. */}
+                                <Stack
+                                    direction={{ xs: "column", sm: "row" }}
+                                    spacing={1.5}
+                                >
                                     <Button
                                         type="submit"
                                         variant="contained"
-                                        disabled={saving}
-                                        sx={{
-                                            bgcolor: "primary.main",
-                                            color: "primary.contrastText",
-                                            fontWeight: 800,
-                                            px: 3,
-                                            py: 1.2,
-                                            borderRadius: 2,
-                                            "&:hover": {
-                                                bgcolor: "primary.dark",
-                                            },
-                                        }}
+                                        disabled={saving || busyGoalId !== null}
+                                        sx={{ px: 3, py: 1.2, fontWeight: 800 }}
                                     >
                                         {saving
                                             ? "Saving..."
@@ -545,9 +502,11 @@ export const CustomerGoals = () => {
                                                 : "Save Changes"}
                                     </Button>
 
+                                    {/* Cancel is shown only while editing a goal. */}
                                     {editingGoalId !== null && (
                                         <Button
                                             variant="outlined"
+                                            color="secondary"
                                             onClick={resetForm}
                                             disabled={saving}
                                         >
@@ -559,22 +518,28 @@ export const CustomerGoals = () => {
                         </Box>
                     </Paper>
 
-                    {/* List goals belonging to this trainer-customer assignment. */}
-                    <Typography variant="h6" gutterBottom>
+                    {/* Section heading shows the number of saved goals. */}
+                    <Typography
+                        variant="h6"
+                        sx={{ color: "secondary.main", fontWeight: 800, mb: 2 }}
+                    >
                         Existing Goals ({goals.length})
                     </Typography>
 
                     {goals.length === 0 ? (
-                        <Typography color="text.secondary">
-                            No fitness goals have been created yet.
-                        </Typography>
+                        // Friendly empty state without inventing progress data.
+                        <Paper
+                            elevation={0}
+                            sx={{ p: 4, borderRadius: 3, border: "1px dashed", borderColor: "divider" }}
+                        >
+                            <Typography color="text.secondary">
+                                No fitness goals yet. Use the form above to create one.
+                            </Typography>
+                        </Paper>
                     ) : (
                         <Stack spacing={2}>
-
                             {goals.map((goal) => (
-
-                                // Each card represents one goal from the Spring Boot backend.
-                                // The goal ID is used as the React key.
+                                // Each card represents one backend goal record.
                                 <Paper
                                     key={goal.id}
                                     elevation={0}
@@ -584,37 +549,29 @@ export const CustomerGoals = () => {
                                         border: "1px solid",
                                         borderColor: "divider",
                                         boxShadow: "0 6px 20px rgba(23, 77, 67, 0.04)",
-
-                                        // A subtle visual response when hovering over a goal card.
                                         transition: "box-shadow 0.2s ease",
                                         "&:hover": {
                                             boxShadow: "0 10px 28px rgba(23, 77, 67, 0.10)",
                                         },
                                     }}
                                 >
-
-                                    {/* Goal title and current status indicator. */}
+                                    {/* Status is displayed separately from the
+                                        dropdown used to change it. */}
                                     <Stack
-                                        spacing={2}
+                                        direction={{ xs: "column", sm: "row" }}
+                                        spacing={1.5}
                                         sx={{
                                             mb: 2,
-                                            flexDirection: { xs: "column", sm: "row" },
                                             justifyContent: "space-between",
                                             alignItems: { xs: "flex-start", sm: "center" },
                                         }}
                                     >
                                         <Typography
                                             variant="h6"
-                                            sx={{
-                                                color: "secondary.main",
-                                                fontWeight: 800,
-                                            }}
+                                            sx={{ color: "secondary.main", fontWeight: 800 }}
                                         >
                                             {goal.title}
                                         </Typography>
-
-                                        {/* The Chip displays the current status visually.
-                It reflects the backend status and does not change it. */}
                                         <Chip
                                             label={goal.status}
                                             size="small"
@@ -636,27 +593,16 @@ export const CustomerGoals = () => {
                                         />
                                     </Stack>
 
-                                    {/* Show the description or a useful fallback message. */}
                                     <Typography
                                         color="text.secondary"
-                                        sx={{
-                                            mb: 2,
-                                            lineHeight: 1.7,
-                                        }}
+                                        sx={{ mb: 2, lineHeight: 1.7, overflowWrap: "anywhere" }}
                                     >
                                         {goal.description || "No description provided."}
                                     </Typography>
 
-                                    {/* Display goal targets without suggesting automatic
-            progress calculations that haven't been implemented. */}
-                                    <Box
-                                        sx={{
-                                            display: "flex",
-                                            gap: 3,
-                                            flexWrap: "wrap",
-                                            mb: 2,
-                                        }}
-                                    >
+                                    {/* Display targets, not fabricated percentages;
+                                        automatic progress isn't implemented. */}
+                                    <Stack direction="row" spacing={4} sx={{ mb: 2, flexWrap: "wrap" }} useFlexGap>
                                         <Box>
                                             <Typography variant="caption" color="text.secondary">
                                                 Target Date
@@ -665,7 +611,6 @@ export const CustomerGoals = () => {
                                                 {goal.targetDate || "Not set"}
                                             </Typography>
                                         </Box>
-
                                         <Box>
                                             <Typography variant="caption" color="text.secondary">
                                                 Target Sessions
@@ -674,12 +619,12 @@ export const CustomerGoals = () => {
                                                 {goal.targetSessions ?? "Not set"}
                                             </Typography>
                                         </Box>
-                                    </Box>
+                                    </Stack>
 
                                     <Divider sx={{ my: 2 }} />
 
-                                    {/* Status dropdown calls the PATCH endpoint.
-            Changing status does not modify other goal details. */}
+                                    {/* Changing this field calls PATCH and leaves
+                                        title, date, and description unchanged. */}
                                     <TextField
                                         select
                                         size="small"
@@ -692,118 +637,81 @@ export const CustomerGoals = () => {
                                                 event.target.value as GoalStatus
                                             )
                                         }
-                                        sx={{
-                                            minWidth: 180,
-                                            mb: 2,
-                                            "& .MuiOutlinedInput-root": {
-                                                borderRadius: 2,
-                                            },
-                                        }}
+                                        sx={{ minWidth: 180, mb: 2 }}
                                     >
                                         <MenuItem value="ACTIVE">Active</MenuItem>
                                         <MenuItem value="COMPLETED">Completed</MenuItem>
                                         <MenuItem value="CANCELLED">Cancelled</MenuItem>
                                     </TextField>
 
-                                    {/* Action buttons remain usable on mobile screens.
-            Edit fills the existing form, while Delete opens a dialog. */}
+                                    {/* Edit populates the form; Delete only opens
+                                        a confirmation dialog. */}
                                     <Stack
                                         direction={{ xs: "column", sm: "row" }}
                                         spacing={1.5}
                                     >
                                         <Button
                                             variant="outlined"
+                                            color="secondary"
                                             size="small"
                                             onClick={() => startEditing(goal)}
                                             disabled={saving || busyGoalId !== null}
-                                            sx={{
-                                                borderColor: "secondary.main",
-                                                color: "secondary.main",
-                                                fontWeight: 700,
-                                            }}
                                         >
                                             Edit Goal
                                         </Button>
-
                                         <Button
                                             variant="outlined"
                                             color="error"
                                             size="small"
                                             onClick={() => openDeleteDialog(goal)}
                                             disabled={saving || busyGoalId !== null}
-                                            sx={{ fontWeight: 700 }}
                                         >
                                             Delete Goal
                                         </Button>
                                     </Stack>
                                 </Paper>
                             ))}
-
                         </Stack>
                     )}
-
-                    {/* Confirmation dialog for deleting a fitness goal.
-
-    This replaces window.confirm() with a dialog that matches
-    the rest of our Material UI application.
-
-    No deletion happens until the trainer clicks Delete Goal. */}
-                    <Dialog
-                        open={goalToDelete !== null}
-                        onClose={closeDeleteDialog}
-                        fullWidth
-                        maxWidth="xs"
-                        slotProps={{
-                            paper: {
-                                sx: {
-                                    borderRadius: 3,
-                                    p: 1,
-                                },
-                            },
-                        }}
-                    >
-                        {/* Clearly describe the irreversible action. */}
-                        <DialogTitle
-                            sx={{
-                                color: "secondary.main",
-                                fontWeight: 800,
-                            }}
-                        >
-                            Delete Fitness Goal?
-                        </DialogTitle>
-
-                        <DialogContent>
-                            <DialogContentText>
-                                Are you sure you want to permanently delete
-                                <strong> {goalToDelete?.title}</strong>?
-                                This action cannot be undone.
-                            </DialogContentText>
-                        </DialogContent>
-
-                        {/* Cancel closes the dialog without contacting the backend.
-        Confirm sends the authenticated DELETE request. */}
-                        <DialogActions sx={{ px: 3, pb: 2 }}>
-                            <Button
-                                onClick={closeDeleteDialog}
-                                disabled={busyGoalId !== null}
-                                color="secondary"
-                            >
-                                Cancel
-                            </Button>
-
-                            <Button
-                                variant="contained"
-                                color="error"
-                                disabled={busyGoalId !== null}
-                                onClick={() => void handleDelete()}
-                            >
-                                {busyGoalId !== null ? "Deleting..." : "Delete Goal"}
-                            </Button>
-                        </DialogActions>
-                    </Dialog>
-
                 </>
             )}
-        </Container>
+
+            {/* The confirmation dialog replaces the native window.confirm().
+                Its action is irreversible, so cancellation is always available. */}
+            <Dialog
+                open={goalToDelete !== null}
+                onClose={closeDeleteDialog}
+                fullWidth
+                maxWidth="xs"
+                slotProps={{ paper: { sx: { borderRadius: 3, p: 1 } } }}
+            >
+                <DialogTitle sx={{ color: "secondary.main", fontWeight: 800 }}>
+                    Delete Fitness Goal?
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Are you sure you want to permanently delete
+                        <strong> {goalToDelete?.title}</strong>? This action cannot be undone.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button
+                        onClick={closeDeleteDialog}
+                        disabled={busyGoalId !== null}
+                        color="secondary"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="error"
+                        disabled={busyGoalId !== null}
+                        onClick={() => void handleDelete()}
+                    >
+                        {busyGoalId !== null ? "Deleting..." : "Delete Goal"}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </Box>
     );
 };
