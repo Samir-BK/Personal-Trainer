@@ -8,8 +8,9 @@ import org.springframework.web.client.RestClientException;
 @Service
 public class UniversityCustomerClient {
 
-    private static final String UNIVERSITY_API_URL =
-            "https://customerrestservice-personaltraining.rahtiapp.fi/api";
+    // Use the same university REST API as the React customer directory.
+    // This URL exposes customer IDs used for trainer assignments.
+    private static final String UNIVERSITY_API_URL = "https://customer-rest-service-frontend-personaltrainer.2.rahtiapp.fi/api";
 
     private final RestClient restClient;
 
