@@ -13,6 +13,9 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { NavigationActions } from './components/NavigationActions';
 import { RegisterPage } from './pages/RegisterPage';
 import { MyCustomers } from './pages/MyCustomer';
+// Allows trainers to create, edit, complete, and delete fitness goals
+// for customers assigned to their account.
+import { CustomerGoals } from './pages/CustomerGoals';
 
 const LoginPageComponent = LoginPage as unknown as ComponentType;
 
@@ -53,6 +56,11 @@ export function App() {
             {/* Customers page */}
             {/* Show only customers assigned to the current trainer. */}
             <Route path='/my-customers' element={<MyCustomers />} />
+            {/* Fitness goals belonging to a specific customer assignment. */}
+            <Route
+              path="/my-customers/:assignmentId/goals"
+              element={<CustomerGoals />}
+            />
             <Route path='/customers' element={<CustomerList />} />
             {/* Trainings page */}
             <Route path='/trainings' element={<TrainingList />} />
