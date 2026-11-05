@@ -14,6 +14,13 @@ import {
     Stack,
     TextField,
     Typography,
+    Chip,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogContentText,
+    DialogTitle,
+    Divider,
 } from "@mui/material";
 
 import {
@@ -83,6 +90,11 @@ export const CustomerGoals = () => {
 
     // Track which goal currently has an update or delete in progress.
     const [busyGoalId, setBusyGoalId] = useState<number | null>(null);
+
+    // Stores the goal selected for deletion.
+    // null means the confirmation dialog is closed.
+    // Keeping the selected goal in state allows the dialog to display its title.
+    const [goalToDelete, setGoalToDelete] = useState<CustomerGoal | null>(null);
 
     // Feedback messages shown after actions or errors.
     const [message, setMessage] = useState("");
@@ -289,47 +301,107 @@ export const CustomerGoals = () => {
         }
     }
 
-    // Delete a goal only after the trainer explicitly confirms.
-    async function handleDelete(goal: CustomerGoal) {
-        const confirmed = window.confirm(
-            `Permanently delete the goal "${goal.title}"?`
-        );
 
-        if (!confirmed) {
+    // Open the confirmation dialog without immediately deleting anything.
+    // The trainer must confirm the action before we contact Spring Boot.
+    function openDeleteDialog(goal: CustomerGoal) {
+        setGoalToDelete(goal);
+    }
+
+    // Close the dialog without deleting the selected goal.
+    function closeDeleteDialog() {
+        // Prevent closing while the DELETE request is running.
+        if (busyGoalId !== null) {
             return;
         }
+
+        setGoalToDelete(null);
+    }
+
+    // Permanently delete the selected goal after confirmation.
+    async function handleDelete() {
+        // Nothing to delete if no goal has been selected.
+        if (goalToDelete === null || busyGoalId !== null) {
+            return;
+        }
+
+        // Store the selected goal locally before the asynchronous request.
+        const goal = goalToDelete;
 
         setBusyGoalId(goal.id);
         setMessage("");
 
         try {
+            // Spring Boot verifies trainer ownership before deleting.
             await deleteCustomerGoal(assignmentId, goal.id);
 
-            // Remove the deleted goal from React state immediately.
+            // Remove the deleted goal from the displayed list.
             setGoals((previous) =>
                 previous.filter((item) => item.id !== goal.id)
             );
 
-            // Clear the form if the deleted goal was being edited.
+            // Clear the edit form if the deleted goal was being edited.
             if (editingGoalId === goal.id) {
                 resetForm();
             }
 
+            // Close the dialog and show successful feedback.
+            setGoalToDelete(null);
             setMessage("Goal deleted successfully.");
             setMessageType("success");
+
         } catch (error) {
+            // Keep the dialog open if deletion fails.
             setMessage(getErrorMessage(error));
             setMessageType("error");
+
         } finally {
             setBusyGoalId(null);
         }
     }
 
+
     return (
-        <Container maxWidth="md" sx={{ mt: 4, mb: 6 }}>
-            <Typography variant="h4" component="h1" gutterBottom>
-                Customer Fitness Goals
-            </Typography>
+
+        <Container maxWidth="lg" sx={{ mt: 2, mb: 6 }}>
+
+            {/* Page heading with the green fitness branding.
+        Keep the heading separate from the goal creation form
+        so trainers can easily identify the current workspace. */}
+            <Box sx={{ mb: 4 }}>
+
+                {/* Small section label above the main heading. */}
+                <Typography
+                    variant="overline"
+                    sx={{
+                        color: "secondary.main",
+                        fontWeight: 800,
+                        letterSpacing: 2,
+                    }}
+                >
+                    CUSTOMER MANAGEMENT
+                </Typography>
+
+                {/* Main heading uses dark forest green from our shared theme. */}
+                <Typography
+                    variant="h4"
+                    component="h1"
+                    sx={{
+                        color: "secondary.main",
+                        fontWeight: 800,
+                        mb: 1,
+                    }}
+                >
+                    Fitness Goals
+                </Typography>
+
+                {/* Explain the purpose of the goal-management page. */}
+                <Typography color="text.secondary">
+                    Set meaningful fitness targets, update goals,
+                    and manage their progress.
+                </Typography>
+            </Box>
+
 
             {/* Return to the list of assigned customers. */}
             <Button
@@ -367,10 +439,30 @@ export const CustomerGoals = () => {
             ) : (
                 <>
                     {/* Form for creating or editing a fitness goal. */}
-                    <Paper sx={{ p: 3, mb: 4 }}>
-                        <Typography variant="h6" gutterBottom>
+                    {/* White form card with rounded corners and a subtle green border.
+    This matches the Login and Registration page styling. */}
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            p: { xs: 2.5, md: 4 },
+                            mb: 4,
+                            borderRadius: 4,
+                            border: "1px solid",
+                            borderColor: "divider",
+                            boxShadow: "0 12px 35px rgba(23, 77, 67, 0.06)",
+                        }}
+                    >
+                        {/* Distinguish editing an existing goal from creating a new one. */}
+                        <Typography
+                            variant="h6"
+                            sx={{
+                                color: "secondary.main",
+                                fontWeight: 800,
+                                mb: 3,
+                            }}
+                        >
                             {editingGoalId === null
-                                ? "Create Fitness Goal"
+                                ? "Create a New Goal"
                                 : "Edit Fitness Goal"}
                         </Typography>
 
@@ -434,6 +526,17 @@ export const CustomerGoals = () => {
                                         type="submit"
                                         variant="contained"
                                         disabled={saving}
+                                        sx={{
+                                            bgcolor: "primary.main",
+                                            color: "primary.contrastText",
+                                            fontWeight: 800,
+                                            px: 3,
+                                            py: 1.2,
+                                            borderRadius: 2,
+                                            "&:hover": {
+                                                bgcolor: "primary.dark",
+                                            },
+                                        }}
                                     >
                                         {saving
                                             ? "Saving..."
@@ -467,83 +570,238 @@ export const CustomerGoals = () => {
                         </Typography>
                     ) : (
                         <Stack spacing={2}>
+
                             {goals.map((goal) => (
-                                <Paper key={goal.id} sx={{ p: 3 }}>
-                                    <Typography variant="h6">
-                                        {goal.title}
+
+                                // Each card represents one goal from the Spring Boot backend.
+                                // The goal ID is used as the React key.
+                                <Paper
+                                    key={goal.id}
+                                    elevation={0}
+                                    sx={{
+                                        p: { xs: 2.5, md: 3 },
+                                        borderRadius: 3,
+                                        border: "1px solid",
+                                        borderColor: "divider",
+                                        boxShadow: "0 6px 20px rgba(23, 77, 67, 0.04)",
+
+                                        // A subtle visual response when hovering over a goal card.
+                                        transition: "box-shadow 0.2s ease",
+                                        "&:hover": {
+                                            boxShadow: "0 10px 28px rgba(23, 77, 67, 0.10)",
+                                        },
+                                    }}
+                                >
+
+                                    {/* Goal title and current status indicator. */}
+                                    <Stack
+                                        spacing={2}
+                                        sx={{
+                                            mb: 2,
+                                            flexDirection: { xs: "column", sm: "row" },
+                                            justifyContent: "space-between",
+                                            alignItems: { xs: "flex-start", sm: "center" },
+                                        }}
+                                    >
+                                        <Typography
+                                            variant="h6"
+                                            sx={{
+                                                color: "secondary.main",
+                                                fontWeight: 800,
+                                            }}
+                                        >
+                                            {goal.title}
+                                        </Typography>
+
+                                        {/* The Chip displays the current status visually.
+                It reflects the backend status and does not change it. */}
+                                        <Chip
+                                            label={goal.status}
+                                            size="small"
+                                            sx={{
+                                                fontWeight: 800,
+                                                bgcolor:
+                                                    goal.status === "ACTIVE"
+                                                        ? "#E8F5E1"
+                                                        : goal.status === "COMPLETED"
+                                                            ? "#174D43"
+                                                            : "#ECEFF0",
+                                                color:
+                                                    goal.status === "COMPLETED"
+                                                        ? "#FFFFFF"
+                                                        : goal.status === "ACTIVE"
+                                                            ? "#276749"
+                                                            : "#53615A",
+                                            }}
+                                        />
+                                    </Stack>
+
+                                    {/* Show the description or a useful fallback message. */}
+                                    <Typography
+                                        color="text.secondary"
+                                        sx={{
+                                            mb: 2,
+                                            lineHeight: 1.7,
+                                        }}
+                                    >
+                                        {goal.description || "No description provided."}
                                     </Typography>
 
-                                    <Typography sx={{ my: 1 }}>
-                                        {goal.description || "No description"}
-                                    </Typography>
+                                    {/* Display goal targets without suggesting automatic
+            progress calculations that haven't been implemented. */}
+                                    <Box
+                                        sx={{
+                                            display: "flex",
+                                            gap: 3,
+                                            flexWrap: "wrap",
+                                            mb: 2,
+                                        }}
+                                    >
+                                        <Box>
+                                            <Typography variant="caption" color="text.secondary">
+                                                Target Date
+                                            </Typography>
+                                            <Typography sx={{ fontWeight: 700 }}>
+                                                {goal.targetDate || "Not set"}
+                                            </Typography>
+                                        </Box>
 
-                                    <Typography variant="body2">
-                                        Target date: {goal.targetDate || "Not set"}
-                                    </Typography>
+                                        <Box>
+                                            <Typography variant="caption" color="text.secondary">
+                                                Target Sessions
+                                            </Typography>
+                                            <Typography sx={{ fontWeight: 700 }}>
+                                                {goal.targetSessions ?? "Not set"}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
 
-                                    <Typography variant="body2" sx={{ mb: 2 }}>
-                                        Target sessions:{" "}
-                                        {goal.targetSessions ?? "Not set"}
-                                    </Typography>
+                                    <Divider sx={{ my: 2 }} />
 
-                                    {/* Trainer can change the goal status. */}
+                                    {/* Status dropdown calls the PATCH endpoint.
+            Changing status does not modify other goal details. */}
                                     <TextField
                                         select
                                         size="small"
-                                        label="Status"
+                                        label="Goal Status"
                                         value={goal.status}
-                                        disabled={busyGoalId === goal.id}
+                                        disabled={saving || busyGoalId !== null}
                                         onChange={(event) =>
                                             void handleStatusChange(
                                                 goal,
                                                 event.target.value as GoalStatus
                                             )
                                         }
-                                        sx={{ minWidth: 170, mb: 2 }}
+                                        sx={{
+                                            minWidth: 180,
+                                            mb: 2,
+                                            "& .MuiOutlinedInput-root": {
+                                                borderRadius: 2,
+                                            },
+                                        }}
                                     >
-                                        <MenuItem value="ACTIVE">
-                                            Active
-                                        </MenuItem>
-                                        <MenuItem value="COMPLETED">
-                                            Completed
-                                        </MenuItem>
-                                        <MenuItem value="CANCELLED">
-                                            Cancelled
-                                        </MenuItem>
+                                        <MenuItem value="ACTIVE">Active</MenuItem>
+                                        <MenuItem value="COMPLETED">Completed</MenuItem>
+                                        <MenuItem value="CANCELLED">Cancelled</MenuItem>
                                     </TextField>
 
-                                    <Stack direction="row" spacing={2}>
+                                    {/* Action buttons remain usable on mobile screens.
+            Edit fills the existing form, while Delete opens a dialog. */}
+                                    <Stack
+                                        direction={{ xs: "column", sm: "row" }}
+                                        spacing={1.5}
+                                    >
                                         <Button
                                             variant="outlined"
                                             size="small"
                                             onClick={() => startEditing(goal)}
-                                            disabled={
-                                                saving ||
-                                                busyGoalId === goal.id
-                                            }
+                                            disabled={saving || busyGoalId !== null}
+                                            sx={{
+                                                borderColor: "secondary.main",
+                                                color: "secondary.main",
+                                                fontWeight: 700,
+                                            }}
                                         >
-                                            Edit
+                                            Edit Goal
                                         </Button>
 
                                         <Button
                                             variant="outlined"
                                             color="error"
                                             size="small"
-                                            onClick={() =>
-                                                void handleDelete(goal)
-                                            }
-                                            disabled={
-                                                saving ||
-                                                busyGoalId === goal.id
-                                            }
+                                            onClick={() => openDeleteDialog(goal)}
+                                            disabled={saving || busyGoalId !== null}
+                                            sx={{ fontWeight: 700 }}
                                         >
-                                            Delete
+                                            Delete Goal
                                         </Button>
                                     </Stack>
                                 </Paper>
                             ))}
+
                         </Stack>
                     )}
+
+                    {/* Confirmation dialog for deleting a fitness goal.
+
+    This replaces window.confirm() with a dialog that matches
+    the rest of our Material UI application.
+
+    No deletion happens until the trainer clicks Delete Goal. */}
+                    <Dialog
+                        open={goalToDelete !== null}
+                        onClose={closeDeleteDialog}
+                        fullWidth
+                        maxWidth="xs"
+                        slotProps={{
+                            paper: {
+                                sx: {
+                                    borderRadius: 3,
+                                    p: 1,
+                                },
+                            },
+                        }}
+                    >
+                        {/* Clearly describe the irreversible action. */}
+                        <DialogTitle
+                            sx={{
+                                color: "secondary.main",
+                                fontWeight: 800,
+                            }}
+                        >
+                            Delete Fitness Goal?
+                        </DialogTitle>
+
+                        <DialogContent>
+                            <DialogContentText>
+                                Are you sure you want to permanently delete
+                                <strong> {goalToDelete?.title}</strong>?
+                                This action cannot be undone.
+                            </DialogContentText>
+                        </DialogContent>
+
+                        {/* Cancel closes the dialog without contacting the backend.
+        Confirm sends the authenticated DELETE request. */}
+                        <DialogActions sx={{ px: 3, pb: 2 }}>
+                            <Button
+                                onClick={closeDeleteDialog}
+                                disabled={busyGoalId !== null}
+                                color="secondary"
+                            >
+                                Cancel
+                            </Button>
+
+                            <Button
+                                variant="contained"
+                                color="error"
+                                disabled={busyGoalId !== null}
+                                onClick={() => void handleDelete()}
+                            >
+                                {busyGoalId !== null ? "Deleting..." : "Delete Goal"}
+                            </Button>
+                        </DialogActions>
+                    </Dialog>
+
                 </>
             )}
         </Container>
