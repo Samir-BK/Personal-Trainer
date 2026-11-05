@@ -1,26 +1,78 @@
+# Docker Compose configuration for the Personal Trainer Management System.
+#
+# Runs the Spring Boot backend and PostgreSQL together.
+# The React frontend can continue running locally using Vite.
+#
+# PostgreSQL data is stored in a named Docker volume so it
+# survives container restarts and recreation.
 
 services:
+
+  # PostgreSQL database
   postgres:
+    # Keep the PostgreSQL version already used by the project.
     image: postgres:17
+    # Retain the existing container name for consistency.
     container_name: trainer-postgres
+    # Automatically restart the database unless explicitly stopped.
     restart: unless-stopped
 
+    # Initialize the database and database user.
+    # The password is read from the root project's .env file.
     environment:
       POSTGRES_DB: trainer_db
       POSTGRES_USER: trainer
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
 
+    # Expose PostgreSQL only to the local computer.
+    # Other Compose containers use postgres:5432 instead.
     ports:
       - "127.0.0.1:5433:5432"
 
+    # Preserve database records when containers are recreated.
     volumes:
       - trainer_postgres_data:/var/lib/postgresql/data
 
+    # Verify that PostgreSQL is ready to accept connections.
+    # The backend waits for this health check before starting.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U trainer -d trainer_db"]
       interval: 5s
       timeout: 5s
       retries: 10
 
+  # Spring Boot REST API
+  backend:
+    # Build the image from the Dockerfile inside backend/.
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    # Give the backend container a recognizable name.
+    container_name: trainer-backend
+
+    # Restart the backend automatically unless explicitly stopped.
+    restart: unless-stopped
+
+    # Spring Boot reads these properties from the environment.
+    # The database hostname is the Compose service name "postgres".
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/trainer_db
+      SPRING_DATASOURCE_USERNAME: trainer
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+
+    # Make the backend accessible locally on port 8080.
+    # Binding to 127.0.0.1 prevents direct public exposure.
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    # Start the backend only after PostgreSQL passes its health check.
+    # This does not replace application-level database error handling.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+# Named volumes are managed by Docker.
+# Removing or rebuilding containers does not erase stored data.
 volumes:
   trainer_postgres_data:
