@@ -1,31 +1,32 @@
-
 import { useEffect, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 
-// Material UI components for the page layout and customer table.
+// Material UI provides accessible layout, status messages, and table controls.
 import {
     Alert,
     Box,
     Button,
+    Chip,
     CircularProgress,
-    Container,
+    Paper,
+    Stack,
     Typography,
 } from "@mui/material";
 import { DataGrid, type GridColDef } from "@mui/x-data-grid";
 
-// Customer information comes from the university REST API.
+// Customer contact details come from the university REST API.
 import type { Customer } from "../types/trainer";
 import { fetchCustomers } from "../services/trainerService";
 
-// Customer assignments are stored in our Spring Boot backend.
+// Assignment IDs and ownership come from our Spring Boot backend.
 import {
     getAssignedCustomers,
     type TrainerCustomerAssignment,
 } from "../services/trainerCustomerService";
 
-// Extract a university customer's numeric ID from its HAL self-link.
-// Example: https://example.com/api/customers/3 -> 3
-// Returns null if the link is missing or does not contain a valid ID.
+// Read the university customer ID from the HAL self-link.
+// Example: https://example.com/api/customers/3 -> 3.
+// A missing or invalid ID must not be matched to an assignment.
 function getUniversityCustomerId(customer: Customer): number | null {
     const href = customer._links?.self?.href;
 
@@ -33,13 +34,15 @@ function getUniversityCustomerId(customer: Customer): number | null {
         return null;
     }
 
+    // Accept a trailing slash or query string without depending on the host.
     const match = href.match(/\/customers\/(\d+)\/?(?:\?.*)?$/);
+    const id = match ? Number(match[1]) : null;
 
-    return match ? Number(match[1]) : null;
+    return id !== null && Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-// Each table row combines customer details from the university API
-// with trainer-specific assignment information from PostgreSQL.
+// Each table row joins customer details from the university with the
+// trainer's assignment record stored in PostgreSQL.
 type AssignedCustomerRow = Customer & {
     assignmentId: number;
     universityCustomerId: number;
@@ -47,259 +50,279 @@ type AssignedCustomerRow = Customer & {
 };
 
 export const MyCustomers = () => {
-
-    // Stores the customers assigned to the currently logged-in trainer.
+    // Display only customers assigned to the authenticated trainer.
     const [rows, setRows] = useState<AssignedCustomerRow[]>([]);
 
-    // Controls whether the loading spinner is displayed.
-    const [loading, setLoading] = useState<boolean>(true);
+    // Keep loading and error feedback separate from the data itself.
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
-    // Stores an error message if either API request fails.
-    const [error, setError] = useState<string>("");
-
-    // useEffect runs when the page is first mounted.
-    // We fetch customer assignments and university customer details.
+    // Load the trainer's assignments and current university customer details.
     useEffect(() => {
-
-        // Prevents updating React state after leaving this page.
+        // Avoid updating state if the trainer navigates away before requests finish.
         let active = true;
 
         async function loadMyCustomers() {
             try {
-                // Step 1: Fetch the current trainer's assignments.
-                // Spring Security identifies the trainer using the session.
-                // We never send a trainer ID from the frontend.
+                // Spring Security determines the trainer from the session cookie.
+                // Never send a trainer ID from client-side state or URL parameters.
                 const assignments: TrainerCustomerAssignment[] =
                     await getAssignedCustomers();
 
-                // Step 2: Fetch university customer information.
-                // PostgreSQL stores only customer IDs, not their personal data.
+                // We store external customer IDs, not copies of personal details.
                 const customers = await fetchCustomers();
 
-                // Step 3: Build a lookup table using university customer IDs.
-                // A Map allows us to find a customer quickly by their ID.
-                // This is safer than matching customers using names or emails.
+                // Match by stable university ID rather than name or email.
                 const customersById = new Map<number, Customer>();
-
                 customers.forEach((customer) => {
                     const customerId = getUniversityCustomerId(customer);
-
-                    // Ignore records without a usable university customer ID.
                     if (customerId !== null) {
                         customersById.set(customerId, customer);
                     }
                 });
 
-                // Step 4: Match each assignment with its university customer.
-                // Only customers assigned to this trainer appear in the table.
+                // Build rows using only assignments returned for this trainer.
                 const assignedRows: AssignedCustomerRow[] = [];
-
                 assignments.forEach((assignment) => {
                     const customer = customersById.get(
                         assignment.universityCustomerId
                     );
 
-                    // Skip assignments whose customer details are unavailable.
-                    // Later, we can display these separately as missing records.
+                    // The university record may have been removed or become unavailable.
+                    // Preserve the existing behavior of omitting unmatched records.
                     if (!customer) {
                         return;
                     }
 
                     assignedRows.push({
                         ...customer,
-
-                        // Assignment ID belongs to our PostgreSQL database.
+                        // This PostgreSQL ID is used for trainer-specific goals.
                         assignmentId: assignment.id,
-
-                        // Customer ID belongs to the university REST API.
-                        universityCustomerId:
-                            assignment.universityCustomerId,
-
-                        // Timestamp comes from the trainer_customer table.
+                        // This ID identifies the customer in the university API.
+                        universityCustomerId: assignment.universityCustomerId,
                         assignedAt: assignment.assignedAt,
                     });
                 });
 
-                // Only update state if the page is still mounted.
                 if (active) {
                     setRows(assignedRows);
                     setError("");
                 }
-
             } catch (err) {
-                // Log the original error for debugging.
                 console.error("Unable to load assigned customers:", err);
 
-                // Display a user-friendly message instead of crashing.
                 if (active) {
+                    // Do not leave previously loaded customer details visible after failure.
+                    setRows([]);
                     setError(
                         "Unable to load your customers. Check that both APIs are available."
                     );
                 }
-
             } finally {
-                // Stop displaying the spinner when loading finishes.
                 if (active) {
                     setLoading(false);
                 }
             }
         }
 
-        // Start loading customers when the component mounts.
         void loadMyCustomers();
 
-        // Cleanup executes when the user leaves the page.
+        // Ignore late responses after the page unmounts.
         return () => {
             active = false;
         };
-
     }, []);
 
-    // Define the columns displayed in the Material UI DataGrid.
+    // The DataGrid displays university contact details and assignment metadata.
     const columns: GridColDef<AssignedCustomerRow>[] = [
-        {
-            field: "firstname",
-            headerName: "First Name",
-            flex: 1,
-        },
-        {
-            field: "lastname",
-            headerName: "Last Name",
-            flex: 1,
-        },
-        {
-            field: "email",
-            headerName: "Email",
-            flex: 1.6,
-        },
-        {
-            field: "phone",
-            headerName: "Phone",
-            flex: 1.1,
-        },
-        {
-            field: "city",
-            headerName: "City",
-            flex: 1,
-        },
+        { field: "firstname", headerName: "First Name", flex: 1, minWidth: 125 },
+        { field: "lastname", headerName: "Last Name", flex: 1, minWidth: 125 },
+        { field: "email", headerName: "Email", flex: 1.6, minWidth: 190 },
+        { field: "phone", headerName: "Phone", flex: 1.1, minWidth: 145 },
+        { field: "city", headerName: "City", flex: 1, minWidth: 120 },
         {
             field: "assignedAt",
             headerName: "Assigned On",
-            flex: 1.2,
-
-            // Convert the ISO timestamp into a readable local date.
-            // Example: 2026-11-04T19:00:00Z -> local date.
+            flex: 1.1,
+            minWidth: 145,
+            // Format the backend timestamp in the trainer's local date format.
             valueFormatter: (value: string | null | undefined) =>
                 value ? new Date(value).toLocaleDateString() : "—",
         },
-
         {
             field: "goals",
             headerName: "Fitness Goals",
-            width: 160,
+            width: 165,
             sortable: false,
             filterable: false,
-
-            // Each button opens the goals belonging to this specific
-            // trainer-customer assignment.
-            //
-            // Use assignmentId, NOT universityCustomerId.
-            // The backend verifies that the logged-in trainer owns it.
+            // Use the PostgreSQL assignment ID, NOT the university customer ID.
+            // Spring Boot checks assignment ownership again on the goals endpoint.
             renderCell: (params) => (
                 <Button
                     component={RouterLink}
                     to={`/my-customers/${params.row.assignmentId}/goals`}
                     variant="contained"
                     size="small"
+                    sx={{
+                        bgcolor: "primary.main",
+                        color: "primary.contrastText",
+                        fontWeight: 700,
+                        whiteSpace: "nowrap",
+                        boxShadow: "none",
+                        "&:hover": { bgcolor: "primary.dark", boxShadow: "none" },
+                    }}
                 >
                     Manage Goals
                 </Button>
             ),
         },
-
     ];
 
     return (
-        <Container maxWidth="lg" sx={{ mt: 4 }}>
+        // App.tsx already provides the outer responsive Container.
+        // Avoid nesting another Container and unnecessarily narrowing the table.
+        <Box sx={{ width: "100%", pb: 5 }}>
+            {/* Page heading and explanation use the forest-green theme. */}
+            <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={2}
+                sx={{
+                    mb: 3,
+                    justifyContent: "space-between",
+                    alignItems: { xs: "flex-start", sm: "center" },
+                }}
+            >
+                <Box>
+                    <Typography
+                        variant="overline"
+                        sx={{ color: "secondary.main", fontWeight: 800, letterSpacing: 2 }}
+                    >
+                        CUSTOMER MANAGEMENT
+                    </Typography>
+                    <Typography
+                        variant="h4"
+                        component="h1"
+                        sx={{ color: "secondary.main", fontWeight: 800, mb: 1 }}
+                    >
+                        My Customers
+                    </Typography>
+                    <Typography color="text.secondary">
+                        View your assigned customers and manage their fitness goals.
+                    </Typography>
+                </Box>
 
-            {/* Page heading */}
-            <Typography variant="h4" component="h1" gutterBottom>
-                My Customers
-            </Typography>
-
-            {/* Explain the purpose of this page */}
-            <Typography variant="body2" sx={{ mb: 3 }}>
-                Customers assigned to your trainer account.
-                Goals and private training notes will be added here next.
-            </Typography>
-
-            {/* Link back to the complete university customer directory */}
-            <Box sx={{ mb: 2 }}>
+                {/* Allow trainers to return to the full university directory. */}
                 <Button
                     component={RouterLink}
                     to="/customers"
                     variant="outlined"
+                    color="secondary"
+                    sx={{ fontWeight: 700, flexShrink: 0 }}
                 >
                     Browse Customer Directory
                 </Button>
-            </Box>
+            </Stack>
 
-            {/* Show an error message if customer loading fails */}
+            {/* Surface API errors without replacing them with an empty-state message. */}
             {error && (
-                <Alert severity="error" sx={{ mb: 2 }}>
+                <Alert severity="error" sx={{ mb: 3 }}>
                     {error}
                 </Alert>
             )}
 
-            {/* Show a spinner while requests are still running */}
+            {/* Display a loading indicator while both API requests complete. */}
             {loading ? (
-                <Box
+                <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+                    <CircularProgress color="secondary" />
+                </Box>
+            ) : !error && (
+                <Paper
+                    elevation={0}
                     sx={{
-                        display: "flex",
-                        justifyContent: "center",
-                        p: 4,
+                        p: { xs: 2, md: 3 },
+                        borderRadius: 4,
+                        border: "1px solid",
+                        borderColor: "divider",
+                        boxShadow: "0 12px 35px rgba(23, 77, 67, 0.06)",
                     }}
                 >
-                    <CircularProgress />
-                </Box>
-            ) : (
-                <>
-                    {/* Show the number of matched assigned customers */}
-                    <Typography variant="subtitle1" sx={{ mb: 2 }}>
-                        Assigned customers: {rows.length}
-                    </Typography>
-
-                    {/* Display assigned customers in a paginated table */}
-                    <Box sx={{ height: 550, width: "100%" }}>
-                        <DataGrid
-                            // Rows contain university details and assignment data.
-                            rows={rows}
-
-                            // Column configuration defined above.
-                            columns={columns}
-
-                            // Use the PostgreSQL assignment ID as the row key.
-                            getRowId={(row) => row.assignmentId}
-
-                            // Allow users to select the page size.
-                            pageSizeOptions={[10, 25, 50]}
-
-                            // Display 10 records per page initially.
-                            initialState={{
-                                pagination: {
-                                    paginationModel: {
-                                        pageSize: 10,
-                                    },
-                                },
-                            }}
-
-                            // Display borders between rows' cells and columns.
-                            showCellVerticalBorder
-                            showColumnVerticalBorder
+                    {/* Show a live count, not a hard-coded customer total. */}
+                    <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1}
+                        sx={{
+                            mb: 2.5,
+                            alignItems: { xs: "flex-start", sm: "center" },
+                            justifyContent: "space-between",
+                        }}
+                    >
+                        <Typography variant="h6" sx={{ color: "secondary.main", fontWeight: 800 }}>
+                            Assigned Customers
+                        </Typography>
+                        <Chip
+                            label={`${rows.length} ${rows.length === 1 ? "customer" : "customers"}`}
+                            sx={{ bgcolor: "#E8F5E1", color: "#174D43", fontWeight: 800 }}
                         />
-                    </Box>
-                </>
+                    </Stack>
+
+                    {/* A helpful empty state explains how to assign the first customer. */}
+                    {rows.length === 0 ? (
+                        <Box sx={{ textAlign: "center", py: 7, px: 2 }}>
+                            <Typography variant="h6" sx={{ color: "secondary.main", mb: 1 }}>
+                                No assigned customers yet
+                            </Typography>
+                            <Typography color="text.secondary" sx={{ mb: 3 }}>
+                                Browse the customer directory and assign customers to your account.
+                            </Typography>
+                            <Button
+                                component={RouterLink}
+                                to="/customers"
+                                variant="contained"
+                                sx={{ fontWeight: 700 }}
+                            >
+                                Browse Customers
+                            </Button>
+                        </Box>
+                    ) : (
+                        // A horizontal scroll wrapper keeps every column and the
+                        // Manage Goals button available on narrow screens.
+                        <Box sx={{ width: "100%", overflowX: "auto" }}>
+                            <Box sx={{ minWidth: 950, height: 550 }}>
+                                <DataGrid
+                                    rows={rows}
+                                    columns={columns}
+                                    // The assignment ID is unique to this trainer's row.
+                                    getRowId={(row) => row.assignmentId}
+                                    pageSizeOptions={[10, 25, 50]}
+                                    initialState={{
+                                        pagination: {
+                                            paginationModel: { pageSize: 10, page: 0 },
+                                        },
+                                    }}
+                                    disableRowSelectionOnClick
+                                    sx={{
+                                        border: 0,
+                                        "& .MuiDataGrid-columnHeaders": {
+                                            bgcolor: "#E8F5E1",
+                                            color: "#174D43",
+                                        },
+                                        "& .MuiDataGrid-columnHeaderTitle": {
+                                            fontWeight: 800,
+                                        },
+                                        "& .MuiDataGrid-row:hover": {
+                                            bgcolor: "#F7FAF5",
+                                        },
+                                        "& .MuiDataGrid-cell": {
+                                            display: "flex",
+                                            alignItems: "center",
+                                        },
+                                    }}
+                                />
+                            </Box>
+                        </Box>
+                    )}
+                </Paper>
             )}
-        </Container>
+        </Box>
     );
 };
