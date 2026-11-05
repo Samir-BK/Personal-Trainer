@@ -176,9 +176,16 @@ export function App() {
 
           {/* AppBar displays the shared top navigation bar.
                         position="static" keeps it in the normal page flow,
-                        so it does not cover the page content. */}
-          <AppBar position="static" color="primary">
-
+           {/* Use forest green for the application navbar.
+    Lime green remains the accent color for active links
+    and important action buttons. */}
+          <AppBar
+            position="static"
+            sx={{
+              bgcolor: "secondary.main",
+              color: "#FFFFFF",
+            }}
+          >
             {/* Toolbar arranges the application title and
                             navigation actions horizontally.
 
