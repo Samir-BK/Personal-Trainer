@@ -1,5 +1,5 @@
 // Routing components from React Router
-import { BrowserRouter, Routes, Route} from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 // Material UI components for layout and styling
 import { AppBar, Toolbar, Typography, Container } from '@mui/material';
 // Page components, one for each route
@@ -12,6 +12,7 @@ import type { ComponentType } from 'react';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { NavigationActions } from './components/NavigationActions';
 import { RegisterPage } from './pages/RegisterPage';
+import { MyCustomers } from './pages/MyCustomer';
 
 const LoginPageComponent = LoginPage as unknown as ComponentType;
 
@@ -50,6 +51,8 @@ export function App() {
             {/* Home page: shows the customer list by default */}
             <Route path='/' element={<CustomerList />} />
             {/* Customers page */}
+            {/* Show only customers assigned to the current trainer. */}
+            <Route path='/my-customers' element={<MyCustomers />} />
             <Route path='/customers' element={<CustomerList />} />
             {/* Trainings page */}
             <Route path='/trainings' element={<TrainingList />} />
