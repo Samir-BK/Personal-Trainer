@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/university-api/:path*",
+      "destination": "https://customer-rest-service-frontend-personaltrainer.2.rahtiapp.fi/api/:path*"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://personal-trainer-backend-6mai.onrender.com/api/:path*"
     },
