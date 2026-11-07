@@ -55,4 +55,8 @@ img {
   max-width: 100%;
   height: auto;
 }
-  
+
+/* Hide the unused resource row in calendar event details. */
+.MuiEventCalendar-eventDialogResourceContainer {
+    display: none !important;
+}
