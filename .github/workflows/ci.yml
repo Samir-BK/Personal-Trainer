@@ -6,6 +6,16 @@ on:
   pull_request:
     branches: [main]
 
+# Grant the GitHub Actions token only the permissions needed
+# to check out the repository and run our CI checks.
+#
+# Both backend and frontend jobs only build and test code.
+# Neither job needs permission to modify repository contents.
+#
+# Any permission not listed here is denied.
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: Backend tests
