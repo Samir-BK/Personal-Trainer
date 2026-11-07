@@ -224,7 +224,7 @@ export const TrainingCalendar = () => {
                 color="text.secondary"
                 sx={{ mb: 3 }}
             >
-                View university training sessions by month, week,
+                View training sessions by month, week,
                 or day. Select an event to inspect its details.
                 Manage training records from the Training Sessions page.
             </Typography>
