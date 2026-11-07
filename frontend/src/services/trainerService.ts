@@ -209,3 +209,26 @@ export const updateCustomer = async (
     );
 };
 
+    /**
+     * Permanently delete a customer from the university REST API.
+     *
+     * DELETE /customers/{id}
+     */
+
+export const deleteCustomer = async (
+    customerId: number
+): Promise<void> => {
+
+    // Reject missing, negative, or otherwise invalid customer IDs.
+    // This prevents accidental requests to unexpected API paths.
+    if (!Number.isSafeInteger(customerId) || customerId <= 0) {
+        throw new Error("Invalid university customer ID.");
+    }
+
+    // Delete the customer using the existing Axios client.
+    //
+    // Locally, requests use the configured university API URL.
+    // On Vercel, requests go through the /university-api proxy.
+    await client.delete(`customers/${customerId}`);
+};
+
