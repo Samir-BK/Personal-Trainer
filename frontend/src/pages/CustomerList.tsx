@@ -19,7 +19,7 @@ import {
 
 // University customer records are fetched from the university REST API.
 import type { Customer } from "../types/trainer";
-import { fetchCustomers, createCustomer, type CustomerRequest } from "../services/trainerService";
+import { fetchCustomers, createCustomer, updateCustomer, type CustomerRequest } from "../services/trainerService";
 
 // Assignments belong to the authenticated trainer and are stored in Spring Boot.
 import {
@@ -67,6 +67,11 @@ export const CustomerList = () => {
 
     // Controls whether the Add Customer dialog is visible.
     const [addDialogOpen, setAddDialogOpen] = useState(false);
+
+    // Tracks which university customer is currently being edited.
+    // null means the dialog is creating a new customer.
+    // A numeric ID means the dialog is editing an existing customer.
+    const [editingCustomerId, setEditingCustomerId] = useState<number | null>(null);
 
     // Prevent duplicate customer creation requests.
     const [savingCustomer, setSavingCustomer] = useState(false);
@@ -251,9 +256,49 @@ export const CustomerList = () => {
 
     // Open the Add Customer dialog.
     function openAddCustomerDialog() {
+        setEditingCustomerId(null);
         resetCustomerForm();
         setAddDialogOpen(true);
     }
+
+    // Open the existing customer form in EDIT mode.
+    //
+    // We use the customer's university HAL self-link to identify
+    // the record that should be updated.
+    //
+    // The form is populated with its current values so the trainer
+    // only needs to change the fields they want to modify.
+    function openEditCustomerDialog(customer: Customer) {
+        const customerId = getUniversityCustomerId(customer);
+
+        // Never send an update request without a valid university ID.
+        if (customerId === null) {
+            setMessage("Cannot edit a customer without a valid ID.");
+            setMessageType("error");
+            return;
+        }
+
+        // Store the customer ID to distinguish editing from creation.
+        setEditingCustomerId(customerId);
+
+        // Copy the current university customer details into the form.
+        // Empty strings prevent controlled React inputs from receiving
+        // undefined or null values.
+        setCustomerForm({
+            firstname: customer.firstname ?? "",
+            lastname: customer.lastname ?? "",
+            streetaddress: customer.streetaddress ?? "",
+            postcode: customer.postcode ?? "",
+            city: customer.city ?? "",
+            email: customer.email ?? "",
+            phone: customer.phone ?? "",
+        });
+
+        // Clear previous validation errors and open the same dialog.
+        setFormError("");
+        setAddDialogOpen(true);
+    }
+
 
     // Close the dialog without sending any request.
     function closeAddCustomerDialog() {
@@ -263,17 +308,41 @@ export const CustomerList = () => {
         }
 
         setAddDialogOpen(false);
+        setEditingCustomerId(null);
         resetCustomerForm();
     }
 
+    // Save customer details to the university REST API.
+    //
+    // CREATE MODE:
+    //   editingCustomerId === null
+    //   POST /customers
+    //
+    // EDIT MODE:
+    //   editingCustomerId contains a university customer ID
+    //   PUT /customers/{id}
     // Submit the new customer to the university REST API.
-    async function handleCreateCustomer() {
-        // Prevent submitting the same request more than once.
+
+    // Save customer details to the university REST API.
+    //
+    // CREATE MODE:
+    //   editingCustomerId === null
+    //   POST /customers
+    //
+    // EDIT MODE:
+    //   editingCustomerId contains a university customer ID
+    //   PUT /customers/{id}
+    //
+    // Reusing the same function avoids duplicating form validation,
+    // loading states, error handling, and directory refreshing.
+    async function handleSaveCustomer() {
+
+        // Prevent multiple simultaneous create/update requests.
         if (savingCustomer) {
             return;
         }
 
-        // Remove accidental spaces from the form fields.
+        // Remove accidental whitespace before submitting customer data.
         const request: CustomerRequest = {
             firstname: customerForm.firstname.trim(),
             lastname: customerForm.lastname.trim(),
@@ -284,7 +353,8 @@ export const CustomerList = () => {
             phone: customerForm.phone.trim(),
         };
 
-        // Check required fields before contacting the university API.
+        // Validate the required customer fields.
+        // University API validation remains the final authority.
         if (
             !request.firstname ||
             !request.lastname ||
@@ -296,45 +366,76 @@ export const CustomerList = () => {
             return;
         }
 
+        // Validate the email format before sending the request.
+        // The previous button-click form did not automatically
+        // trigger the browser's native email validation.
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        if (!emailPattern.test(request.email)) {
+            setFormError("Enter a valid email address.");
+            return;
+        }
+
+        // Disable the Save button and clear previous form errors.
         setSavingCustomer(true);
         setFormError("");
 
         try {
-            // POST /customers creates a university customer record.
-            // This does not automatically assign the customer to a trainer.
-            await createCustomer(request);
+            if (editingCustomerId !== null) {
 
-            // Reload the university customer directory.
-            // This ensures the DataGrid reflects server-side data.
+                // EDIT: Update the existing university customer.
+                // The Spring Boot trainer assignment is not modified.
+                await updateCustomer(editingCustomerId, request);
+
+            } else {
+
+                // CREATE: Add a new record to the university directory.
+                // It is not automatically assigned to the current trainer.
+                await createCustomer(request);
+            }
+
+            // Fetch fresh customer data from the university API.
+            // This ensures the DataGrid displays the saved details.
             const updatedCustomers = await fetchCustomers();
             setCustomers(updatedCustomers);
 
-            // Close and reset the form after successful creation.
-            setAddDialogOpen(false);
-            resetCustomerForm();
-
-            // Show success feedback on the Customer Directory page.
-            setMessage("Customer created successfully.");
+            // Show the appropriate message based on the form mode.
+            setMessage(
+                editingCustomerId !== null
+                    ? "Customer updated successfully."
+                    : "Customer created successfully."
+            );
             setMessageType("success");
 
-        } catch (error) {
-            console.error("Unable to create customer:", error);
+            // Close the dialog and clear the editing state.
+            setAddDialogOpen(false);
+            setEditingCustomerId(null);
+            resetCustomerForm();
 
-            // Prefer the backend's error message when available.
+        } catch (error) {
+
+            // Log the original error for development troubleshooting.
+            console.error("Unable to save customer:", error);
+
+            // Prefer the university API error when it provides one.
             const backendError = axios.isAxiosError(error)
                 ? error.response?.data?.error
                 : undefined;
 
+            // Keep the dialog open so entered values are not lost.
             setFormError(
                 typeof backendError === "string"
                     ? backendError
-                    : "Unable to create customer. Please try again."
+                    : "Unable to save customer. Please try again."
             );
+
         } finally {
-            // Re-enable the form whether the request succeeds or fails.
+
+            // Restore the button after success or failure.
             setSavingCustomer(false);
         }
     }
+
 
     // Define DataGrid columns. Preserve all university customer fields
     // and add a private trainer-assignment action at the end of each row.
@@ -408,6 +509,41 @@ export const CustomerList = () => {
                 );
             },
         },
+
+        {
+            // Allow trainers to edit customer records from the university API.
+            //
+            // This button edits the university customer itself.
+            // It does not modify trainer-specific PostgreSQL assignments.
+            field: "editCustomer",
+            headerName: "Edit Customer",
+            width: 150,
+            sortable: false,
+            filterable: false,
+
+            // Each row provides the original customer data.
+            // Clicking Edit opens the shared Add/Edit Customer dialog.
+            renderCell: (params) => (
+                <Button
+                    variant="outlined"
+                    size="small"
+                    color="secondary"
+                    onClick={() => openEditCustomerDialog(params.row)}
+                    disabled={
+                        savingCustomer ||
+                        busyCustomerId !== null ||
+                        loading
+                    }
+                    sx={{
+                        fontWeight: 700,
+                        borderRadius: 2,
+                    }}
+                >
+                    Edit
+                </Button>
+            ),
+        },
+
     ];
 
     return (
@@ -556,7 +692,9 @@ export const CustomerList = () => {
                             fontWeight: 800,
                         }}
                     >
-                        Add New Customer
+                        {editingCustomerId === null
+                            ? "Enter the customer's details to create a new record."
+                            : "Update the customer's information in the university directory."}
                     </DialogTitle>
 
                     <DialogContent>
@@ -663,7 +801,7 @@ export const CustomerList = () => {
 
                         <Button
                             variant="contained"
-                            onClick={() => void handleCreateCustomer()}
+                            onClick={() => void handleSaveCustomer()}
                             disabled={savingCustomer}
                             sx={{
                                 bgcolor: "primary.main",
@@ -674,7 +812,11 @@ export const CustomerList = () => {
                                 },
                             }}
                         >
-                            {savingCustomer ? "Creating..." : "Create Customer"}
+                            {savingCustomer
+                                ? "Saving..."
+                                : editingCustomerId === null
+                                    ? "Create Customer"
+                                    : "Save Changes"}
                         </Button>
                     </DialogActions>
                 </Dialog>
