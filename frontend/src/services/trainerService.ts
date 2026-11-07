@@ -294,3 +294,24 @@ export const createTraining = async (
     // This does not modify our Spring Boot PostgreSQL database.
     await client.post("trainings", training);
 };
+
+
+/**
+ * Permanently delete an existing university training session.
+ *
+ * DELETE /trainings/{id}
+ */
+export const deleteTraining = async (
+    trainingId: number
+): Promise<void> => {
+
+    // Only accept a valid, positive integer training ID.
+    // This prevents requests to malformed API endpoints.
+    if (!Number.isSafeInteger(trainingId) || trainingId <= 0) {
+        throw new Error("Invalid university training ID.");
+    }
+
+    // Request deletion from the university REST API.
+    // No local state is modified until the server confirms success.
+    await client.delete(`trainings/${trainingId}`);
+};
