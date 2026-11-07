@@ -15,7 +15,8 @@ import {
     TextField,
     Typography,
     Chip,
-    Paper
+    Paper,
+    DialogContentText,
 } from "@mui/material";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
@@ -29,8 +30,13 @@ import {
     fetchTrainings,
     fetchCustomers,
     fetchCustomersByURL,
-    createTraining
+    createTraining,
+    deleteTraining
 } from "../services/trainerService";
+
+// Identify HTTP errors returned by the university REST API.
+import axios from "axios";
+
 
 // Each row contains a university training record and, when available,
 // the customer details retrieved using the training's HAL customer link.
@@ -78,6 +84,24 @@ export const TrainingList = () => {
     const [pageMessage, setPageMessage] = useState("");
     const [pageMessageType, setPageMessageType] =
         useState<"success" | "error">("success");
+
+
+    // Stores the training selected for deletion.
+    //
+    // null means the confirmation dialog is closed.
+    // Keeping the training object allows us to show its activity,
+    // date, and customer before the trainer confirms deletion.
+    const [trainingToDelete, setTrainingToDelete] =
+        useState<TrainingWithCustomer | null>(null);
+
+    // Tracks whether a DELETE request is currently running.
+    // This prevents duplicate submissions and accidental dialog closure.
+    const [deletingTraining, setDeletingTraining] = useState(false);
+
+    // Stores errors returned when training deletion fails.
+    // Errors appear inside the confirmation dialog.
+    const [deleteError, setDeleteError] = useState("");
+
 
 
     // Fetch the training list once when this page is mounted.
@@ -288,6 +312,142 @@ export const TrainingList = () => {
     }
 
 
+    // Extract the real university training ID.
+    //
+    // Prefer the numeric ID returned by the API when available.
+    // If the API does not expose an ID directly, extract it from
+    // the HAL self-link, such as /api/trainings/12.
+    //
+    // Never use a DataGrid row index or a random ID for deletion.
+    function getTrainingId(training: Training): number | null {
+        const directId = Number(training.id);
+
+        // Accept a valid ID directly from the training record.
+        if (Number.isSafeInteger(directId) && directId > 0) {
+            return directId;
+        }
+
+        // Some HAL responses expose a self-link instead of an ID.
+        // Read that optional link without changing the Training type.
+        const links = training._links as {
+            self?: { href?: string };
+        };
+
+        const href = links.self?.href;
+
+        if (!href) {
+            return null;
+        }
+
+        // Extract a numeric ID from the end of the training URL.
+        // Example: https://example.com/api/trainings/12 -> 12
+        const match = href.match(
+            /\/trainings\/(\d+)\/?(?:\?.*)?$/
+        );
+
+        return match ? Number(match[1]) : null;
+    }
+
+    // Open the confirmation dialog for one training.
+    //
+    // Clicking Delete in the table does not immediately delete
+    // anything from the university API.
+    function openDeleteTrainingDialog(
+        training: TrainingWithCustomer
+    ) {
+        const trainingId = getTrainingId(training);
+
+        // Reject records without a valid university training ID.
+        if (trainingId === null) {
+            setPageMessage(
+                "Cannot delete this training because its ID is unavailable."
+            );
+            setPageMessageType("error");
+            return;
+        }
+
+        // Store the selected training and clear previous errors.
+        setTrainingToDelete(training);
+        setDeleteError("");
+    }
+
+    // Close the dialog without deleting the selected training.
+    function closeDeleteTrainingDialog() {
+        // Keep the dialog open while the DELETE request is running.
+        if (deletingTraining) {
+            return;
+        }
+
+        setTrainingToDelete(null);
+        setDeleteError("");
+    }
+
+    // Permanently delete the training after explicit confirmation.
+    //
+    // This operation affects the university REST API.
+    // It does not modify our Spring Boot PostgreSQL database.
+    async function handleDeleteTraining() {
+        // Do nothing if no training is selected.
+        if (trainingToDelete === null || deletingTraining) {
+            return;
+        }
+
+        // Retrieve the university ID from the selected record.
+        const trainingId = getTrainingId(trainingToDelete);
+
+        if (trainingId === null) {
+            setDeleteError("The selected training has no valid ID.");
+            return;
+        }
+
+        // Prevent duplicate deletion requests.
+        setDeletingTraining(true);
+        setDeleteError("");
+
+        try {
+            // Call DELETE /trainings/{id} through our university API client.
+            await deleteTraining(trainingId);
+
+            // Remove the deleted training from the displayed table.
+            // Only update local state after the API confirms success.
+            setTrainings((previous) =>
+                previous.filter(
+                    (training) =>
+                        getTrainingId(training) !== trainingId
+                )
+            );
+
+            // Close the confirmation dialog.
+            setTrainingToDelete(null);
+            setDeleteError("");
+
+            // Display a success message above the training table.
+            setPageMessage("Training deleted successfully.");
+            setPageMessageType("success");
+
+        } catch (error: unknown) {
+            // Keep the dialog open if the API rejects deletion.
+            console.error("Unable to delete training:", error);
+
+            // Prefer a readable API error if one is available.
+            const backendError = axios.isAxiosError(error)
+                ? error.response?.data?.error
+                : undefined;
+
+            setDeleteError(
+                typeof backendError === "string"
+                    ? backendError
+                    : "Unable to delete training. Please try again."
+            );
+
+        } finally {
+            // Restore the confirmation controls after the request.
+            setDeletingTraining(false);
+        }
+    }
+
+
+
     // Configure the columns shown in the training table.
     // Every column has a minimum width so narrow screens can scroll
     // horizontally instead of squeezing the text into unreadable cells.
@@ -328,6 +488,47 @@ export const TrainingList = () => {
                     ? `${row.customer.firstname} ${row.customer.lastname}`
                     : "Unavailable",
         },
+
+        {
+            // Provide a Delete action for each university training session.
+            //
+            // The button opens a confirmation dialog first.
+            // It never immediately sends a DELETE request.
+            field: "deleteTraining",
+            headerName: "Actions",
+            width: 145,
+            sortable: false,
+            filterable: false,
+
+            // The row contains the original training and its customer details.
+            renderCell: (params) => {
+                const trainingId = getTrainingId(params.row);
+
+                return (
+                    <Button
+                        variant="outlined"
+                        color="error"
+                        size="small"
+                        onClick={() =>
+                            openDeleteTrainingDialog(params.row)
+                        }
+                        disabled={
+                            trainingId === null ||
+                            deletingTraining ||
+                            savingTraining ||
+                            loading
+                        }
+                        sx={{
+                            fontWeight: 700,
+                            borderRadius: 2,
+                        }}
+                    >
+                        Delete
+                    </Button>
+                );
+            },
+        },
+
     ];
 
     return (
@@ -652,6 +853,115 @@ export const TrainingList = () => {
                             }}
                         >
                             {savingTraining ? "Saving..." : "Create Training"}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+
+                {/* Confirmation dialog for deleting an existing training.
+    The actual DELETE request is sent only after the trainer
+    explicitly clicks Yes, Delete. */}
+                <Dialog
+                    open={trainingToDelete !== null}
+                    onClose={closeDeleteTrainingDialog}
+                    fullWidth
+                    maxWidth="xs"
+                    slotProps={{
+                        paper: {
+                            sx: {
+                                borderRadius: 3,
+                                p: 1,
+                            },
+                        },
+                    }}
+                >
+                    {/* Clearly identify the destructive action. */}
+                    <DialogTitle
+                        sx={{
+                            color: "secondary.main",
+                            fontWeight: 800,
+                        }}
+                    >
+                        Delete Training?
+                    </DialogTitle>
+
+                    <DialogContent>
+                        {/* Identify the training session being deleted. */}
+                        <DialogContentText sx={{ mb: 2 }}>
+                            Are you sure you want to permanently delete
+                            this training session?
+                        </DialogContentText>
+
+                        {/* Show training details to prevent deleting the wrong row. */}
+                        <Box
+                            sx={{
+                                bgcolor: "background.default",
+                                p: 2,
+                                borderRadius: 2,
+                                mb: 2,
+                            }}
+                        >
+                            <Typography sx={{ fontWeight: 700 }}>
+                                {trainingToDelete?.activity}
+                            </Typography>
+
+                            <Typography variant="body2" color="text.secondary">
+                                Customer:{" "}
+                                {trainingToDelete?.customer
+                                    ? `${trainingToDelete.customer.firstname} ${trainingToDelete.customer.lastname}`
+                                    : "Unavailable"}
+                            </Typography>
+
+                            <Typography variant="body2" color="text.secondary">
+                                Date:{" "}
+                                {trainingToDelete?.date
+                                    ? dayjs(trainingToDelete.date).format(
+                                        "DD.MM.YYYY HH:mm"
+                                    )
+                                    : "Not available"}
+                            </Typography>
+
+                            <Typography variant="body2" color="text.secondary">
+                                Duration:{" "}
+                                {trainingToDelete?.duration ?? "—"} minutes
+                            </Typography>
+                        </Box>
+
+                        {/* Warn the trainer that deletion cannot be undone. */}
+                        <Alert severity="warning" sx={{ mb: 2 }}>
+                            This operation permanently deletes the training
+                            of the customer.
+                        </Alert>
+
+                        {/* Keep API errors visible without closing the dialog. */}
+                        {deleteError && (
+                            <Alert severity="error">
+                                {deleteError}
+                            </Alert>
+                        )}
+                    </DialogContent>
+
+                    {/* Cancel closes the dialog without changing data.
+        Confirm sends the DELETE request to the university API. */}
+                    <DialogActions sx={{ px: 3, pb: 2 }}>
+                        <Button
+                            color="secondary"
+                            onClick={closeDeleteTrainingDialog}
+                            disabled={deletingTraining}
+                        >
+                            No, Cancel
+                        </Button>
+
+                        <Button
+                            variant="contained"
+                            color="error"
+                            onClick={() => void handleDeleteTraining()}
+                            disabled={deletingTraining}
+                            sx={{
+                                fontWeight: 700,
+                                borderRadius: 2,
+                            }}
+                        >
+                            {deletingTraining ? "Deleting..." : "Yes, Delete"}
                         </Button>
                     </DialogActions>
                 </Dialog>
