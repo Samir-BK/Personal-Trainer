@@ -102,6 +102,9 @@ export const CustomerList = () => {
     // Store errors specific to the Add Customer form.
     const [formError, setFormError] = useState("");
 
+    // Tracks whether the customer CSV export is in progress.
+    const [exportingCustomers, setExportingCustomers] = useState(false);
+
 
     // Load directory records and private assignments when the page opens.
     useEffect(() => {
@@ -545,6 +548,83 @@ export const CustomerList = () => {
     }
 
 
+    // Runs when the user clicks the "Export CSV" button.
+    // It builds a CSV file from the customers currently shown in the table and downloads it.
+    const handleExportCsv = () => {
+        if (exportingCustomers) {
+            return;
+        }
+
+        setExportingCustomers(true);
+
+        try {
+            // The columns we want in the CSV, in this exact order.
+            // Array<keyof Customer> means TypeScript only accepts real field names from the Customer type.
+            const exportFields: Array<keyof Customer> = [
+                'firstname',
+                'lastname',
+                'streetaddress',
+                'postcode',
+                'city',
+                'email',
+                'phone',
+            ]
+
+            // Wraps a value in double quotes so commas/newlines inside it don't break the CSV.
+            // If the value already has a ", CSV rule says to double it ("") so it's treated as a literal quote.
+            const escapeCsvValue = (value: string) => `"${value.replaceAll('"', '""')}"`
+
+            // First line of the CSV: the column names, joined with commas
+            const headerRow = exportFields.join(',')
+
+            // One CSV line per customer currently loaded in the directory.
+            const dataRows = customers.map((customer) =>
+                exportFields
+                    .map((field) => {
+                        // Grab this customer's value for the current column
+                        const value = customer[field]
+                        // If it's null/undefined, use an empty string so we don't get "null" in the file.
+                        // Otherwise convert to string (in case it's a number etc.) and escape it.
+                        return escapeCsvValue(value == null ? '' : String(value))
+                    })
+                    .join(','), // join the columns of one customer into a single line
+            )
+
+            // Glue it all together: header first, then every data row, one per line
+            const csvContent = [headerRow, ...dataRows].join('\n')
+
+            // Wrap the text in a Blob (basically an in-memory "file")
+            const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+
+            // Make a temporary URL that points to that in-memory file so the browser can download it
+            const csvUrl = window.URL.createObjectURL(csvBlob)
+
+            // Create an invisible <a> link element to trigger the download
+            const link = document.createElement('a')
+            link.href = csvUrl
+            link.setAttribute('download', 'CustomerList.csv') // the filename the user gets
+
+            // Some browsers only allow clicking links that are actually in the page, so add it temporarily
+            document.body.appendChild(link)
+            link.click() // "click" it to start the download
+            document.body.removeChild(link) // remove it again, we don't need it anymore
+
+            // Free the memory used by the temporary URL
+            window.URL.revokeObjectURL(csvUrl)
+        } catch (error) {
+            // Keep API errors visible instead of downloading an empty file.
+            console.error("Unable to export customers:", error);
+
+            setMessage(
+                "Unable to export customers. Please try again."
+            );
+            setMessageType("error");
+        } finally {
+            // Re-enable the export button after success or failure.
+            setExportingCustomers(false);
+        }
+    }
+
     // Define DataGrid columns. Preserve all university customer fields
     // and add a private trainer-assignment action at the end of each row.
     const columns: GridColDef<Customer>[] = [
@@ -714,7 +794,13 @@ export const CustomerList = () => {
 
                 {/* Open the customer creation form.
     The lime-green button matches the application's fitness theme. */}
-                <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 3 }}>
+                <Box sx={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    gap: 2,
+                    flexWrap: "wrap",
+                    mb: 3,
+                }}>
                     <Button
                         variant="contained"
                         onClick={openAddCustomerDialog}
@@ -730,6 +816,22 @@ export const CustomerList = () => {
                     >
                         + Add Customer
                     </Button>
+
+                    {/* Export all university customer records to a CSV file.
+    This action does not modify any customer or assignment data. */}
+                    <Button
+                        variant="outlined"
+                        color="secondary"
+                        onClick={() => void handleExportCsv()}
+                        sx={{
+                            fontWeight: 700,
+                            px: 3,
+                            borderRadius: 2,
+                        }}
+                    >
+                        Export CSV
+                    </Button>
+
                 </Box>
 
             </Box>
