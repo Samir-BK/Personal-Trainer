@@ -10,11 +10,16 @@ import {
     Paper,
     Stack,
     Typography,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField,
 } from "@mui/material";
 
 // University customer records are fetched from the university REST API.
 import type { Customer } from "../types/trainer";
-import { fetchCustomers } from "../services/trainerService";
+import { fetchCustomers, createCustomer, type CustomerRequest } from "../services/trainerService";
 
 // Assignments belong to the authenticated trainer and are stored in Spring Boot.
 import {
@@ -58,6 +63,29 @@ export const CustomerList = () => {
     // One dismissible alert is used for both success and error feedback.
     const [message, setMessage] = useState("");
     const [messageType, setMessageType] = useState<"success" | "error">("success");
+
+
+    // Controls whether the Add Customer dialog is visible.
+    const [addDialogOpen, setAddDialogOpen] = useState(false);
+
+    // Prevent duplicate customer creation requests.
+    const [savingCustomer, setSavingCustomer] = useState(false);
+
+    // Store the customer's input fields separately from the
+    // university customer records displayed in the DataGrid.
+    const [customerForm, setCustomerForm] = useState<CustomerRequest>({
+        firstname: "",
+        lastname: "",
+        streetaddress: "",
+        postcode: "",
+        city: "",
+        email: "",
+        phone: "",
+    });
+
+    // Store errors specific to the Add Customer form.
+    const [formError, setFormError] = useState("");
+
 
     // Load directory records and private assignments when the page opens.
     useEffect(() => {
@@ -194,6 +222,120 @@ export const CustomerList = () => {
         }
     }
 
+    // Update one input field without overwriting the others.
+    // The field name must match a property in CustomerRequest.
+    function updateCustomerForm(
+        field: keyof CustomerRequest,
+        value: string
+    ) {
+        setCustomerForm((previous) => ({
+            ...previous,
+            [field]: value,
+        }));
+    }
+
+    // Clear form fields after successful creation or cancellation.
+    function resetCustomerForm() {
+        setCustomerForm({
+            firstname: "",
+            lastname: "",
+            streetaddress: "",
+            postcode: "",
+            city: "",
+            email: "",
+            phone: "",
+        });
+
+        setFormError("");
+    }
+
+    // Open the Add Customer dialog.
+    function openAddCustomerDialog() {
+        resetCustomerForm();
+        setAddDialogOpen(true);
+    }
+
+    // Close the dialog without sending any request.
+    function closeAddCustomerDialog() {
+        // Do not close while the POST request is running.
+        if (savingCustomer) {
+            return;
+        }
+
+        setAddDialogOpen(false);
+        resetCustomerForm();
+    }
+
+    // Submit the new customer to the university REST API.
+    async function handleCreateCustomer() {
+        // Prevent submitting the same request more than once.
+        if (savingCustomer) {
+            return;
+        }
+
+        // Remove accidental spaces from the form fields.
+        const request: CustomerRequest = {
+            firstname: customerForm.firstname.trim(),
+            lastname: customerForm.lastname.trim(),
+            streetaddress: customerForm.streetaddress.trim(),
+            postcode: customerForm.postcode.trim(),
+            city: customerForm.city.trim(),
+            email: customerForm.email.trim(),
+            phone: customerForm.phone.trim(),
+        };
+
+        // Check required fields before contacting the university API.
+        if (
+            !request.firstname ||
+            !request.lastname ||
+            !request.email
+        ) {
+            setFormError(
+                "First name, last name, and email are required."
+            );
+            return;
+        }
+
+        setSavingCustomer(true);
+        setFormError("");
+
+        try {
+            // POST /customers creates a university customer record.
+            // This does not automatically assign the customer to a trainer.
+            await createCustomer(request);
+
+            // Reload the university customer directory.
+            // This ensures the DataGrid reflects server-side data.
+            const updatedCustomers = await fetchCustomers();
+            setCustomers(updatedCustomers);
+
+            // Close and reset the form after successful creation.
+            setAddDialogOpen(false);
+            resetCustomerForm();
+
+            // Show success feedback on the Customer Directory page.
+            setMessage("Customer created successfully.");
+            setMessageType("success");
+
+        } catch (error) {
+            console.error("Unable to create customer:", error);
+
+            // Prefer the backend's error message when available.
+            const backendError = axios.isAxiosError(error)
+                ? error.response?.data?.error
+                : undefined;
+
+            setFormError(
+                typeof backendError === "string"
+                    ? backendError
+                    : "Unable to create customer. Please try again."
+            );
+        } finally {
+            // Re-enable the form whether the request succeeds or fails.
+            setSavingCustomer(false);
+        }
+    }
+
     // Define DataGrid columns. Preserve all university customer fields
     // and add a private trainer-assignment action at the end of each row.
     const columns: GridColDef<Customer>[] = [
@@ -291,6 +433,27 @@ export const CustomerList = () => {
                     Browse customers and assign them to your trainer account.
                     Assignments are private to your account.
                 </Typography>
+
+                {/* Open the customer creation form.
+    The lime-green button matches the application's fitness theme. */}
+                <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 3 }}>
+                    <Button
+                        variant="contained"
+                        onClick={openAddCustomerDialog}
+                        sx={{
+                            bgcolor: "primary.main",
+                            color: "primary.contrastText",
+                            fontWeight: 700,
+                            px: 3,
+                            "&:hover": {
+                                bgcolor: "primary.dark",
+                            },
+                        }}
+                    >
+                        + Add Customer
+                    </Button>
+                </Box>
+
             </Box>
 
             {/* Summary badges reflect the data currently loaded on this page. */}
@@ -369,6 +532,153 @@ export const CustomerList = () => {
                         />
                     </Box>
                 </Box>
+
+                {/* Add Customer dialog.
+    A Dialog keeps the trainer on the customer directory while
+    creating a new record in the university REST API. */}
+                <Dialog
+                    open={addDialogOpen}
+                    onClose={closeAddCustomerDialog}
+                    fullWidth
+                    maxWidth="sm"
+                    slotProps={{
+                        paper: {
+                            sx: {
+                                borderRadius: 3,
+                            },
+                        },
+                    }}
+                >
+                    {/* Dialog heading uses the application's forest-green color. */}
+                    <DialogTitle
+                        sx={{
+                            color: "secondary.main",
+                            fontWeight: 800,
+                        }}
+                    >
+                        Add New Customer
+                    </DialogTitle>
+
+                    <DialogContent>
+                        <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 3 }}
+                        >
+                            Enter the customer's details to create a record
+                            in the university customer directory.
+                        </Typography>
+
+                        {/* Show validation or university API errors within the dialog. */}
+                        {formError && (
+                            <Alert severity="error" sx={{ mb: 2 }}>
+                                {formError}
+                            </Alert>
+                        )}
+
+                        {/* These fields update customerForm in React state.
+            No request is sent until Create Customer is clicked. */}
+                        <Stack spacing={2}>
+                            <TextField
+                                label="First Name"
+                                fullWidth
+                                required
+                                value={customerForm.firstname}
+                                onChange={(event) =>
+                                    updateCustomerForm("firstname", event.target.value)
+                                }
+                            />
+
+                            <TextField
+                                label="Last Name"
+                                fullWidth
+                                required
+                                value={customerForm.lastname}
+                                onChange={(event) =>
+                                    updateCustomerForm("lastname", event.target.value)
+                                }
+                            />
+
+                            <TextField
+                                label="Street Address"
+                                fullWidth
+                                value={customerForm.streetaddress}
+                                onChange={(event) =>
+                                    updateCustomerForm("streetaddress", event.target.value)
+                                }
+                            />
+
+                            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                                <TextField
+                                    label="Postcode"
+                                    fullWidth
+                                    value={customerForm.postcode}
+                                    onChange={(event) =>
+                                        updateCustomerForm("postcode", event.target.value)
+                                    }
+                                />
+
+                                <TextField
+                                    label="City"
+                                    fullWidth
+                                    value={customerForm.city}
+                                    onChange={(event) =>
+                                        updateCustomerForm("city", event.target.value)
+                                    }
+                                />
+                            </Stack>
+
+                            <TextField
+                                label="Email"
+                                type="email"
+                                fullWidth
+                                required
+                                value={customerForm.email}
+                                onChange={(event) =>
+                                    updateCustomerForm("email", event.target.value)
+                                }
+                            />
+
+                            <TextField
+                                label="Phone"
+                                fullWidth
+                                value={customerForm.phone}
+                                onChange={(event) =>
+                                    updateCustomerForm("phone", event.target.value)
+                                }
+                            />
+                        </Stack>
+                    </DialogContent>
+
+                    {/* Cancel closes the dialog.
+        Create Customer submits the form to the university API. */}
+                    <DialogActions sx={{ px: 3, pb: 3 }}>
+                        <Button
+                            color="secondary"
+                            onClick={closeAddCustomerDialog}
+                            disabled={savingCustomer}
+                        >
+                            Cancel
+                        </Button>
+
+                        <Button
+                            variant="contained"
+                            onClick={() => void handleCreateCustomer()}
+                            disabled={savingCustomer}
+                            sx={{
+                                bgcolor: "primary.main",
+                                color: "primary.contrastText",
+                                fontWeight: 700,
+                                "&:hover": {
+                                    bgcolor: "primary.dark",
+                                },
+                            }}
+                        >
+                            {savingCustomer ? "Creating..." : "Create Customer"}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+
             </Paper>
         </Container>
     );
