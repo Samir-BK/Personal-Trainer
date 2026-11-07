@@ -172,3 +172,40 @@ export const createCustomer = async (
     // Return the newly created customer to the calling component.
     return response.data;
 };
+
+
+/**
+ * Update an existing customer in the university REST API.
+ *
+ * The customer ID comes from the university customer's HAL self-link,
+ * not from our Spring Boot trainer_customer assignment table.
+ *
+ * PUT /customers/{id} sends the updated customer details.
+ *
+ * This operation changes the university customer record.
+ * It does not change trainer-specific customer assignments.
+ *
+ * The university API client uses Vercel's /university-api proxy
+ * in production, so the same function works after deployment.
+ *
+ * HTTP errors are propagated to the calling page so that
+ * CustomerList can display appropriate feedback.
+ */
+export const updateCustomer = async (
+    customerId: number,
+    customer: CustomerRequest
+): Promise<void> => {
+
+    // Reject invalid IDs before sending an HTTP request.
+    if (!Number.isSafeInteger(customerId) || customerId <= 0) {
+        throw new Error("Invalid university customer ID.");
+    }
+
+    // Send the updated customer fields to the university service.
+    // Do not include HAL links or our internal assignment ID.
+    await client.put(
+        `customers/${customerId}`,
+        customer
+    );
+};
+
