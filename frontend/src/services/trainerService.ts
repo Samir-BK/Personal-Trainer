@@ -209,11 +209,11 @@ export const updateCustomer = async (
     );
 };
 
-    /**
-     * Permanently delete a customer from the university REST API.
-     *
-     * DELETE /customers/{id}
-     */
+/**
+ * Permanently delete a customer from the university REST API.
+ *
+ * DELETE /customers/{id}
+ */
 
 export const deleteCustomer = async (
     customerId: number
@@ -232,3 +232,65 @@ export const deleteCustomer = async (
     await client.delete(`customers/${customerId}`);
 };
 
+
+/**
+ * Data required to create a university training session.
+ *
+ * date: ISO 8601 date/time string.
+ * duration: Length of the session in minutes.
+ * activity: Exercise name, such as Running or Cycling.
+ * customer: HAL self-link identifying the selected customer.
+ *
+ * The customer relationship refers to the university API,
+ * not our PostgreSQL trainer-customer assignment table.
+ */
+export type TrainingRequest = {
+    date: string;
+    duration: number;
+    activity: string;
+    customer: string;
+};
+
+/**
+ * Create a training session for a university customer.
+ *
+ * The expected REST endpoint is POST /trainings.
+ * The customer's HAL self-link identifies the related customer.
+ *
+ * The shared Axios client handles both local development and
+ * production requests through our Vercel university API proxy.
+ *
+ * HTTP errors are propagated to TrainingList so the form can
+ * display meaningful feedback.
+ */
+export const createTraining = async (
+    training: TrainingRequest
+): Promise<void> => {
+
+    // Validate the duration before sending the request.
+    // A training must last at least one whole minute.
+    if (
+        !Number.isSafeInteger(training.duration) ||
+        training.duration <= 0
+    ) {
+        throw new Error(
+            "Training duration must be a positive whole number."
+        );
+    }
+
+    // Require a customer relationship and an activity name.
+    if (!training.customer || !training.activity.trim()) {
+        throw new Error(
+            "A customer and an activity are required."
+        );
+    }
+
+    // Validate the date before sending it to the university API.
+    if (Number.isNaN(Date.parse(training.date))) {
+        throw new Error("Invalid training date.");
+    }
+
+    // Create the training in the university REST service.
+    // This does not modify our Spring Boot PostgreSQL database.
+    await client.post("trainings", training);
+};
