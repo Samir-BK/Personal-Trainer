@@ -19,7 +19,7 @@ import {
 
 // University customer records are fetched from the university REST API.
 import type { Customer } from "../types/trainer";
-import { fetchCustomers, createCustomer, updateCustomer, type CustomerRequest } from "../services/trainerService";
+import { fetchCustomers, createCustomer, updateCustomer, deleteCustomer, type CustomerRequest } from "../services/trainerService";
 
 // Assignments belong to the authenticated trainer and are stored in Spring Boot.
 import {
@@ -72,6 +72,17 @@ export const CustomerList = () => {
     // null means the dialog is creating a new customer.
     // A numeric ID means the dialog is editing an existing customer.
     const [editingCustomerId, setEditingCustomerId] = useState<number | null>(null);
+
+    // Stores the university customer selected for deletion.
+    const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+    // Tracks whether a customer DELETE request is running.
+    // This prevents multiple deletion requests and disables
+    // the confirmation controls while the operation completes.
+    const [deletingCustomer, setDeletingCustomer] = useState(false);
+
+    // Displays deletion errors inside the confirmation dialog.
+    // The dialog remains open if the university API rejects deletion.
+    const [deleteError, setDeleteError] = useState("");
 
     // Prevent duplicate customer creation requests.
     const [savingCustomer, setSavingCustomer] = useState(false);
@@ -437,6 +448,103 @@ export const CustomerList = () => {
     }
 
 
+    // Open the confirmation dialog for the selected university customer.
+    //
+    // Clicking Delete in the table does not immediately contact the API.
+    // The trainer must explicitly confirm the destructive operation.
+    function openDeleteCustomerDialog(customer: Customer) {
+        // Only open the dialog if the customer has a valid university ID.
+        const customerId = getUniversityCustomerId(customer);
+
+        if (customerId === null) {
+            setMessage("Cannot delete a customer without a valid ID.");
+            setMessageType("error");
+            return;
+        }
+
+        // Store the selected customer so the dialog can show its details.
+        setCustomerToDelete(customer);
+        setDeleteError("");
+    }
+
+    // Close the deletion dialog without changing customer data.
+    function closeDeleteCustomerDialog() {
+        // Prevent closing during an active DELETE request.
+        if (deletingCustomer) {
+            return;
+        }
+
+        setCustomerToDelete(null);
+        setDeleteError("");
+    }
+
+    // Delete a university customer only after confirmation.
+    //
+    // This operation removes the university customer record.
+    // It does not automatically remove trainer assignments from
+    // our separate Spring Boot PostgreSQL database.
+    async function handleDeleteCustomer() {
+        // Reject duplicate submissions or a missing selected customer.
+        if (customerToDelete === null || deletingCustomer) {
+            return;
+        }
+
+        // Extract the university ID from the customer's HAL self-link.
+        const customerId = getUniversityCustomerId(customerToDelete);
+
+        if (customerId === null) {
+            setDeleteError("The selected customer has no valid ID.");
+            return;
+        }
+
+        // Prevent accidental duplicate DELETE requests.
+        setDeletingCustomer(true);
+        setDeleteError("");
+
+        try {
+            // Send DELETE /customers/{id} to the university REST API.
+            // The backend determines whether deletion is permitted,
+            // including any constraints involving training records.
+            await deleteCustomer(customerId);
+
+            // Update the customer table without requiring a page reload.
+            // This is safe after the API confirms successful deletion.
+            setCustomers((previous) =>
+                previous.filter(
+                    (customer) =>
+                        getUniversityCustomerId(customer) !== customerId
+                )
+            );
+
+            // Close the confirmation dialog after successful deletion.
+            setCustomerToDelete(null);
+            setDeleteError("");
+
+            // Show confirmation in the main Customer Directory page.
+            setMessage("Customer deleted successfully.");
+            setMessageType("success");
+
+        } catch (error: unknown) {
+            // Keep the dialog open so the trainer can inspect the error.
+            console.error("Unable to delete university customer:", error);
+            // Prefer a readable API error message when one is available.
+            const backendError = axios.isAxiosError(error)
+                ? error.response?.data?.error
+                : undefined;
+
+            setDeleteError(
+                typeof backendError === "string"
+                    ? backendError
+                    : "Unable to delete customer. The customer may have related training records or the service may be unavailable."
+            );
+
+        } finally {
+            // Re-enable the dialog controls when the request completes.
+            setDeletingCustomer(false);
+        }
+    }
+
+
     // Define DataGrid columns. Preserve all university customer fields
     // and add a private trainer-assignment action at the end of each row.
     const columns: GridColDef<Customer>[] = [
@@ -540,6 +648,40 @@ export const CustomerList = () => {
                     }}
                 >
                     Edit
+                </Button>
+            ),
+        },
+
+        {
+            // Display a Delete button for each university customer.
+            //
+            // This deletes the university customer record, NOT the
+            // trainer-specific assignment stored in PostgreSQL.
+            field: "deleteCustomer",
+            headerName: "Delete Customer",
+            width: 160,
+            sortable: false,
+            filterable: false,
+
+            // Use the customer from the DataGrid row when opening the dialog.
+            renderCell: (params) => (
+                <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    onClick={() => openDeleteCustomerDialog(params.row)}
+                    disabled={
+                        deletingCustomer ||
+                        savingCustomer ||
+                        busyCustomerId !== null ||
+                        loading
+                    }
+                    sx={{
+                        fontWeight: 700,
+                        borderRadius: 2,
+                    }}
+                >
+                    Delete
                 </Button>
             ),
         },
@@ -817,6 +959,91 @@ export const CustomerList = () => {
                                 : editingCustomerId === null
                                     ? "Create Customer"
                                     : "Save Changes"}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+
+                {/* Confirmation dialog for permanently deleting a customer.
+
+    This dialog is separate from the Add/Edit Customer form
+    because deleting a customer is a destructive operation.
+
+    The Delete button in the table only opens this dialog.
+    The actual API request runs after explicit confirmation. */}
+                <Dialog
+                    open={customerToDelete !== null}
+                    onClose={closeDeleteCustomerDialog}
+                    fullWidth
+                    maxWidth="xs"
+                    slotProps={{
+                        paper: {
+                            sx: {
+                                borderRadius: 3,
+                                p: 1,
+                            },
+                        },
+                    }}
+                >
+                    {/* Explain which customer will be deleted. */}
+                    <DialogTitle
+                        sx={{
+                            color: "secondary.main",
+                            fontWeight: 800,
+                        }}
+                    >
+                        Delete Customer?
+                    </DialogTitle>
+
+                    <DialogContent>
+                        <Typography
+                            variant="body1"
+                            sx={{ mb: 2 }}
+                        >
+                            Are you sure you want to permanently delete{" "}
+                            <Box component="span" sx={{ fontWeight: 800 }}>
+                                {customerToDelete?.firstname} {customerToDelete?.lastname}
+                            </Box>
+                            ?
+                        </Typography>
+
+                        {/* Explain possible consequences before deletion.
+            Trainer assignments exist in a separate database
+            and are not automatically removed by this action. */}
+                        <Alert severity="warning" sx={{ mb: 2 }}>
+                            This action cannot be undone. It may affect related
+                            training records, and existing trainer assignments
+                            will not be removed automatically.
+                        </Alert>
+
+                        {/* Display errors without closing the confirmation dialog. */}
+                        {deleteError && (
+                            <Alert severity="error">
+                                {deleteError}
+                            </Alert>
+                        )}
+                    </DialogContent>
+
+                    {/* The user can cancel or explicitly confirm deletion. */}
+                    <DialogActions sx={{ px: 3, pb: 2 }}>
+                        <Button
+                            color="secondary"
+                            onClick={closeDeleteCustomerDialog}
+                            disabled={deletingCustomer}
+                        >
+                            No, Cancel
+                        </Button>
+
+                        <Button
+                            variant="contained"
+                            color="error"
+                            onClick={() => void handleDeleteCustomer()}
+                            disabled={deletingCustomer}
+                            sx={{
+                                fontWeight: 700,
+                                borderRadius: 2,
+                            }}
+                        >
+                            {deletingCustomer ? "Deleting..." : "Yes, Delete"}
                         </Button>
                     </DialogActions>
                 </Dialog>
