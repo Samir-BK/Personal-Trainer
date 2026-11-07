@@ -125,3 +125,50 @@ export const fetchCustomersByURL = async (
     // Return the customer information to TrainingList.tsx.
     return response.data;
 };
+
+
+/**
+ * Data required to create a new customer in the university REST API.
+ *
+ * The customer ID and HAL links are not included because the
+ * university service generates these when saving a customer.
+ *
+ * This type is also reused by the customer form in CustomerList.tsx.
+ */
+export type CustomerRequest = {
+    firstname: string;
+    lastname: string;
+    streetaddress: string;
+    postcode: string;
+    city: string;
+    email: string;
+    phone: string;
+};
+
+/**
+ * Create a new university customer.
+ *
+ * POST /customers
+ *
+ * The request uses the existing university Axios client.
+ * In production, Vercel forwards the request through
+ * /university-api/ to the university REST service.
+ *
+ * This does not create a trainer-specific assignment.
+ * Assignments are managed separately by Spring Boot.
+ *
+ * Errors are propagated so the page can show feedback.
+ */
+export const createCustomer = async (
+    customer: CustomerRequest
+): Promise<Customer> => {
+
+    // Submit customer details to the university REST API.
+    const response = await client.post<Customer>(
+        "customers",
+        customer
+    );
+
+    // Return the newly created customer to the calling component.
+    return response.data;
+};
