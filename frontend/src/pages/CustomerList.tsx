@@ -785,9 +785,9 @@ export const CustomerList = () => {
     // Otherwise, display the complete customer directory.
     const displayedCustomers = hasCustomerFilter
         ? customers.filter(
-              (customer) =>
-                  getUniversityCustomerId(customer) === selectedCustomerId
-          )
+            (customer) =>
+                getUniversityCustomerId(customer) === selectedCustomerId
+        )
         : customers;
 
     return (
@@ -866,7 +866,13 @@ export const CustomerList = () => {
                         sx={{ bgcolor: "#E8F5E1", color: "#174D43", fontWeight: 700 }}
                     />
                     <Chip
-                        label={`${assignments.length} assigned to me`}
+                        label={`${new Set(
+                            assignments
+                                .map((a) => a.universityCustomerId)
+                                .filter((id) =>
+                                    customers.some((c) => getUniversityCustomerId(c) === id)
+                                )
+                        ).size} assigned to me`}
                         variant="outlined"
                         sx={{ borderColor: "#9BCF8D", color: "secondary.main", fontWeight: 700 }}
                     />
