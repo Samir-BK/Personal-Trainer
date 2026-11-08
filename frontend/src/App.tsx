@@ -31,6 +31,7 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { TrainingCalendar } from "./pages/TrainingCalendar";
 import { TrainingStatistics } from "./pages/TrainingStatistics";
 import { HomePage } from "./pages/HomePage";
+import { TrainerProfile } from "./pages/TrainerProfile";
 
 // ProtectedRoute prevents unauthenticated users from accessing private pages.
 // NavigationActions displays navigation links and the logout control.
@@ -339,6 +340,12 @@ export function App() {
                   path="/statistics"
                   element={
                     <TrainingStatistics />
+                  }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    <TrainerProfile />
                   }
                 />
               </Route>
