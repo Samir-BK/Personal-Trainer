@@ -170,7 +170,7 @@ export const TrainingStatistics = () => {
                 sx={{ mb: 3 }}
             >
                 Total training minutes grouped by activity using
-                records from the university REST API.
+                records from the Customer's Training Session.
             </Typography>
 
             {/* Show errors instead of displaying misleading statistics. */}
