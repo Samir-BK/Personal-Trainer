@@ -17,6 +17,7 @@ import { LogoutButton } from "./LogoutButton";
 // Define navigation links in one place so desktop and mobile
 // navigation always display the same application pages.
 const navigationItems = [
+  {label: "Home", path: "/"},
   { label: "Customers", path: "/customers" },
   { label: "My Customers", path: "/my-customers" },
   { label: "Trainings", path: "/trainings" },
