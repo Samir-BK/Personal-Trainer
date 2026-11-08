@@ -28,6 +28,7 @@ import {
     removeAssignment,
     type TrainerCustomerAssignment,
 } from "../services/trainerCustomerService";
+import { useSearchParams } from "react-router-dom";
 
 // The university API uses HAL links instead of a normal customer ID field.
 // Extract the numeric ID from links such as /api/customers/3.
@@ -105,6 +106,18 @@ export const CustomerList = () => {
     // Tracks whether the customer CSV export is in progress.
     const [exportingCustomers, setExportingCustomers] = useState(false);
 
+    // Read the customer selected from the Home Dashboard.
+    const [searchParams] = useSearchParams();
+
+    const selectedCustomerId = Number(
+        searchParams.get("customerId")
+    );
+
+    // Only apply filtering when a valid customer ID is present.
+    const hasCustomerFilter =
+        searchParams.has("customerId") &&
+        Number.isSafeInteger(selectedCustomerId) &&
+        selectedCustomerId > 0;
 
     // Load directory records and private assignments when the page opens.
     useEffect(() => {
@@ -768,6 +781,15 @@ export const CustomerList = () => {
 
     ];
 
+    // Filter customers when navigating from an upcoming training.
+    // Otherwise, display the complete customer directory.
+    const displayedCustomers = hasCustomerFilter
+        ? customers.filter(
+              (customer) =>
+                  getUniversityCustomerId(customer) === selectedCustomerId
+          )
+        : customers;
+
     return (
         // App.tsx already provides a shared page container. This narrower
         // container controls the directory's content width on large screens.
@@ -878,7 +900,7 @@ export const CustomerList = () => {
                     <Box sx={{ height: 610, minWidth: 850 }}>
                         <DataGrid
                             // HAL self-links identify university records uniquely.
-                            rows={loadFailed ? [] : customers}
+                            rows={loadFailed ? [] : displayedCustomers}
                             columns={columns}
                             getRowId={(row: Customer) =>
                                 row._links?.self?.href || row.email
