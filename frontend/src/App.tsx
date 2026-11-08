@@ -30,6 +30,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { TrainingCalendar } from "./pages/TrainingCalendar";
 import { TrainingStatistics } from "./pages/TrainingStatistics";
+import { HomePage } from "./pages/HomePage";
 
 // ProtectedRoute prevents unauthenticated users from accessing private pages.
 // NavigationActions displays navigation links and the logout control.
@@ -286,7 +287,7 @@ export function App() {
                                     customer directory by default. */}
                 <Route
                   path="/"
-                  element={<CustomerList />}
+                  element={<HomePage />}
                 />
 
                 {/* Customer Directory:
