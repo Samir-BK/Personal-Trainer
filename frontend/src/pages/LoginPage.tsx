@@ -75,7 +75,7 @@ export function LoginPage() {
             await authService.getCurrentTrainer();
 
             // Redirect to the customer directory after successful login.
-            navigate("/customers", { replace: true });
+            navigate("/", { replace: true });
 
         } catch (error: unknown) {
 
