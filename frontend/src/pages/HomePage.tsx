@@ -1,11 +1,14 @@
 
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import axios from "axios";
 
 import {
     Alert,
     Box,
+    Button,
+    CardActionArea,
     Chip,
     CircularProgress,
     Container,
@@ -16,62 +19,131 @@ import {
 } from "@mui/material";
 
 import {
+    fetchCustomers,
     fetchTrainings,
-    fetchCustomersByURL,
 } from "../services/trainerService";
 
-import {
-    getAssignedCustomers,
-} from "../services/trainerCustomerService";
+import { getAssignedCustomers } from "../services/trainerCustomerService";
 
-import type { Training } from "../types/trainer";
+import type { Customer } from "../types/trainer";
 
 /**
- * Represents a future university training session.
+ * Goal information returned by our Spring Boot backend.
  *
- * The customer name is resolved through the university API's
- * HAL customer relationship link.
+ * Goals belong to a trainer-customer assignment.
+ * Their target dates are deadlines, not training bookings.
  */
-type UpcomingTraining = {
-    id: string;
-    activity: string;
-    customerName: string;
-    date: string;
-    duration: number;
+type CustomerGoal = {
+    id: number;
+    title: string;
+    description?: string | null;
+    status: string;
+    targetDate?: string | null;
+    targetSessions?: number | null;
 };
 
 /**
- * Home Dashboard for authenticated trainers.
+ * Goal information prepared for displaying on the dashboard.
  *
- * The dashboard combines:
- * 1. Trainer-specific customer assignments from our backend.
- * 2. Shared university training data from the external REST API.
+ * assignmentId is the ID required by the existing
+ * /my-customers/:assignmentId/goals route.
+ */
+type DashboardGoal = {
+    id: number;
+    assignmentId: number;
+    customerName: string;
+    title: string;
+    description: string;
+    targetDate: string;
+    targetSessions: number | null;
+};
+
+/**
+ * Extract a university customer ID from a HAL self-link.
  *
- * University trainings are not automatically owned by the
- * currently logged-in trainer. Labels reflect that distinction.
+ * Example:
+ * https://example.com/api/customers/12 -> 12
+ */
+function getCustomerId(href?: string): number | null {
+    const match = href?.match(
+        /\/customers\/(\d+)\/?(?:[?#].*)?$/
+    );
+
+    if (!match) {
+        return null;
+    }
+
+    const id = Number(match[1]);
+
+    return Number.isSafeInteger(id) && id > 0
+        ? id
+        : null;
+}
+
+/**
+ * Return a readable customer name.
+ *
+ * Keep the fallback simple when customer information is
+ * incomplete or unavailable.
+ */
+function getCustomerName(customer: Customer): string {
+    const name = [
+        customer.firstname,
+        customer.lastname,
+    ]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
+    return name || "Unknown customer";
+}
+
+/**
+ * Home Dashboard.
+ *
+ * Displays:
+ * - Logged-in trainer's name
+ * - Assigned customer count
+ * - Training statistics
+ * - Active goal count
+ * - Upcoming customer goal deadlines
+ *
+ * Goal data is fetched directly from the backend, so changing
+ * a goal can be reflected when the dashboard is refreshed.
  */
 export const HomePage = () => {
-    // Number of customers assigned to the logged-in trainer.
-    const [assignedCustomerCount, setAssignedCustomerCount] =
-        useState(0);
+    const navigate = useNavigate();
 
-    // Summary values from the shared university training API.
-    const [trainingCount, setTrainingCount] = useState(0);
-    const [totalMinutes, setTotalMinutes] = useState(0);
-    const [upcomingCount, setUpcomingCount] = useState(0);
-
-    // The five nearest future training sessions.
-    const [upcomingTrainings, setUpcomingTrainings] =
-        useState<UpcomingTraining[]>([]);
-
-    // Track loading and failures.
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    // Information about the authenticated trainer.
     const [trainerName, setTrainerName] = useState("");
 
+    // Dashboard summary statistics.
+    const [customerCount, setCustomerCount] = useState(0);
+    const [trainingCount, setTrainingCount] = useState(0);
+    const [totalMinutes, setTotalMinutes] = useState(0);
+    const [activeGoalCount, setActiveGoalCount] = useState(0);
+
+    // Goals with future target dates, ordered by deadline.
+    const [upcomingGoals, setUpcomingGoals] = useState<
+        DashboardGoal[]
+    >([]);
+
+    // Loading and error feedback.
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [warning, setWarning] = useState("");
+
+    // Increasing this value reloads the dashboard data.
+    // It lets the trainer refresh after changing a goal.
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    /**
+     * Load the trainer's name once.
+     *
+     * The backend identifies the trainer using the current
+     * authenticated session.
+     */
     useEffect(() => {
-        // Prevent state updates if the trainer navigates away
-        // before asynchronous requests have finished.
         let cancelled = false;
 
         async function loadTrainerProfile() {
@@ -89,12 +161,13 @@ export const HomePage = () => {
 
                 const trainer = response.data;
 
-                // Support common naming conventions. Keep only the
-                // fields actually returned by your backend if known.
                 const fullName = [
                     trainer.firstName ?? trainer.firstname,
                     trainer.lastName ?? trainer.lastname,
-                ].filter(Boolean).join(" ").trim();
+                ]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim();
 
                 if (!cancelled) {
                     setTrainerName(
@@ -104,142 +177,206 @@ export const HomePage = () => {
                         ""
                     );
                 }
-            } catch (error) {
-                // Dashboard statistics can still work if profile
-                // information is temporarily unavailable.
-                console.error("Unable to load trainer name:", error);
+            } catch (profileError) {
+                console.error(
+                    "Unable to load trainer profile:",
+                    profileError
+                );
             }
         }
 
         void loadTrainerProfile();
 
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    /**
+     * Load dashboard statistics and customer goals.
+     *
+     * The effect runs when the page mounts and whenever
+     * the trainer clicks Refresh.
+     */
+    useEffect(() => {
+        let cancelled = false;
+
         async function loadDashboard() {
+            setLoading(true);
+            setError("");
+            setWarning("");
+
             try {
-                // Load trainer-specific assignments and university
-                // training sessions at the same time.
-                const [assignments, trainings] = await Promise.all([
-                    getAssignedCustomers(),
-                    fetchTrainings(),
-                ]);
-                // Calculate total minutes using only valid durations.
-                const minutes = trainings.reduce((sum, training) => {
-                    const duration = Number(training.duration);
+                // Load the trainer's assignments and the
+                // customer/training directories.
+                const [assignments, customers, trainings] =
+                    await Promise.all([
+                        getAssignedCustomers(),
+                        fetchCustomers(),
+                        fetchTrainings(),
+                    ]);
 
-                    return Number.isFinite(duration) && duration > 0
-                        ? sum + duration
-                        : sum;
-                }, 0);
+                // Build a lookup of university customers by ID.
+                const customersById = new Map<number, Customer>();
 
-                // Current time is used to find upcoming sessions.
-                const now = Date.now();
+                for (const customer of customers) {
+                    const customerId = getCustomerId(
+                        customer._links?.self?.href
+                    );
 
-                // Keep only future sessions with valid dates.
-                // Sort from nearest to furthest.
-                const futureTrainings = trainings
-                    .filter((training) => {
-                        const startTime = Date.parse(training.date);
+                    if (customerId !== null) {
+                        customersById.set(customerId, customer);
+                    }
+                }
+
+                // Match My Customers: count only assignments with a directory record.
+                const assignedCustomerCount = assignments.filter(
+                    (assignment) =>
+                        customersById.has(assignment.universityCustomerId)
+                ).length;
+
+                /**
+                 * Load goals for every trainer-customer assignment.
+                 *
+                 * This uses the same backend resource as the
+                 * Customer Goals page.
+                 *
+                 * A goal modification will be visible the next
+                 * time this dashboard fetches the goals.
+                 */
+                const goalResults = await Promise.allSettled(
+                    assignments.map(async (assignment) => {
+                        const response = await axios.get<CustomerGoal[]>(
+                            `/api/trainer-customers/${assignment.id}/goals`,
+                            {
+                                withCredentials: true,
+                            }
+                        );
+
+                        return {
+                            assignment,
+                            goals: response.data,
+                        };
+                    })
+                );
+
+                const allGoals: DashboardGoal[] = [];
+                let failedGoalRequests = 0;
+
+                for (const result of goalResults) {
+                    if (result.status === "rejected") {
+                        failedGoalRequests += 1;
+
+                        console.error(
+                            "Unable to load customer goals:",
+                            result.reason
+                        );
+
+                        continue;
+                    }
+
+                    const { assignment, goals } = result.value;
+
+                    const customer = customersById.get(
+                        assignment.universityCustomerId
+                    );
+
+                    const customerName = customer
+                        ? getCustomerName(customer)
+                        : `Customer #${assignment.universityCustomerId}`;
+
+                    for (const goal of goals) {
+                        // Only ACTIVE goals belong in the
+                        // current goal summary.
+                        if (
+                            goal.status?.toUpperCase() !==
+                            "ACTIVE"
+                        ) {
+                            continue;
+                        }
+
+                        allGoals.push({
+                            id: goal.id,
+                            assignmentId: assignment.id,
+                            customerName,
+                            title: goal.title,
+                            description:
+                                goal.description ?? "",
+                            targetDate: goal.targetDate ?? "",
+                            targetSessions:
+                                goal.targetSessions ?? null,
+                        });
+                    }
+                }
+
+                // Today's date at local midnight.
+                // This includes goals due later today.
+                const today = dayjs().startOf("day");
+
+                /**
+                 * Upcoming goals have a valid target date
+                 * equal to or later than today.
+                 *
+                 * Goals without a target date remain counted
+                 * as active but cannot be placed in a
+                 * deadline-based upcoming list.
+                 */
+                const futureGoals = allGoals
+                    .filter((goal) => {
+                        const date = dayjs(goal.targetDate);
 
                         return (
-                            Number.isFinite(startTime) &&
-                            startTime > now
+                            goal.targetDate !== "" &&
+                            date.isValid() &&
+                            !date.isBefore(today, "day")
                         );
                     })
                     .sort(
                         (first, second) =>
-                            Date.parse(first.date) -
-                            Date.parse(second.date)
+                            dayjs(first.targetDate).valueOf() -
+                            dayjs(second.targetDate).valueOf()
                     );
 
-                // The summary counts every future session.
-                // The list below displays only the next five.
-                const nextFive = futureTrainings.slice(0, 5);
+                // Match the Trainings page and original dashboard:
+                // count and total every record returned by the API.
+                const minutes = trainings.reduce(
+                    (sum, training) => {
+                        const duration = Number(
+                            training.duration
+                        );
 
-                // Cache customer requests to avoid fetching the
-                // same customer multiple times unnecessarily.
-                const customerCache = new Map<
-                    string,
-                    ReturnType<typeof fetchCustomersByURL>
-                >();
-
-                // Resolve customer names for upcoming sessions.
-                const upcoming = await Promise.all(
-                    nextFive.map(
-                        async (
-                            training: Training,
-                            index
-                        ): Promise<UpcomingTraining> => {
-                            const customerUrl =
-                                training._links?.customer?.href;
-
-                            let customerName = "Unknown customer";
-
-                            if (customerUrl) {
-                                try {
-                                    let customerRequest =
-                                        customerCache.get(customerUrl);
-
-                                    if (!customerRequest) {
-                                        customerRequest =
-                                            fetchCustomersByURL(
-                                                customerUrl
-                                            );
-
-                                        customerCache.set(
-                                            customerUrl,
-                                            customerRequest
-                                        );
-                                    }
-
-                                    const customer =
-                                        await customerRequest;
-
-                                    customerName =
-                                        `${customer.firstname} ${customer.lastname}`.trim();
-                                } catch (customerError) {
-                                    // One unavailable customer should
-                                    // not prevent the dashboard loading.
-                                    console.error(
-                                        "Unable to load training customer:",
-                                        customerError
-                                    );
-                                }
-                            }
-
-                            return {
-                                // Stable display identifier where
-                                // the university HAL self-link exists.
-                                id:
-                                    training._links?.self?.href ??
-                                    `upcoming-${index}`,
-                                activity:
-                                    training.activity?.trim() ||
-                                    "Unnamed activity",
-                                customerName,
-                                date: training.date,
-                                duration: Number(training.duration),
-                            };
-                        }
-                    )
+                        return Number.isFinite(duration) &&
+                            duration > 0
+                            ? sum + duration
+                            : sum;
+                    },
+                    0
                 );
 
-                // Update state only while this page is mounted.
                 if (!cancelled) {
-                    setAssignedCustomerCount(assignments.length);
+                    setCustomerCount(assignedCustomerCount);
                     setTrainingCount(trainings.length);
                     setTotalMinutes(minutes);
-                    setUpcomingCount(futureTrainings.length);
-                    setUpcomingTrainings(upcoming);
-                    setError("");
+                    setActiveGoalCount(allGoals.length);
+
+                    // Display the five nearest goal deadlines.
+                    setUpcomingGoals(futureGoals.slice(0, 5));
+
+                    if (failedGoalRequests > 0) {
+                        setWarning(
+                            "Some customer goals could not be loaded. The displayed goal totals may be incomplete."
+                        );
+                    }
                 }
             } catch (loadError) {
                 console.error(
-                    "Unable to load trainer dashboard:",
+                    "Unable to load dashboard:",
                     loadError
                 );
 
                 if (!cancelled) {
                     setError(
-                        "Unable to load dashboard information. Please refresh the page and try again."
+                        "Unable to load dashboard information. Please try again."
                     );
                 }
             } finally {
@@ -249,86 +386,120 @@ export const HomePage = () => {
             }
         }
 
-        // Start both asynchronous operations.
-        void loadTrainerProfile();
         void loadDashboard();
 
-        // Clean up only when the component unmounts
-        // or React reruns this effect.
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [refreshKey]);
 
-    /**
-     * Summary cards contain actual API values.
-     *
-     * "My Customers" is private to the logged-in trainer.
-     * The other three metrics use shared university data.
-     */
+    // Summary cards are generated from current API data.
     const metrics = [
         {
             title: "My Customers",
-            value: assignedCustomerCount.toLocaleString(),
-            description: "Customers assigned to your account",
+            value: customerCount.toLocaleString(),
+            description: "Assigned customers",
         },
         {
-            title: "University Trainings",
+            title: "Training Sessions",
             value: trainingCount.toLocaleString(),
-            description: "Sessions in the university API",
+            description: "Recorded sessions",
         },
         {
-            title: "Total Training Time",
+            title: "Training Time",
             value: `${totalMinutes.toLocaleString()} min`,
-            description: "Minutes across university sessions",
+            description: "Total recorded duration",
         },
         {
-            title: "Upcoming Sessions",
-            value: upcomingCount.toLocaleString(),
-            description: "Future university training sessions",
+            title: "Active Goals",
+            value: activeGoalCount.toLocaleString(),
+            description: "Goals currently in progress",
         },
     ];
 
     return (
         <Container maxWidth="lg" sx={{ mt: 5, mb: 6 }}>
-            {/* Dashboard welcome section. */}
-            <Box sx={{ mb: 4 }}>
-                <Typography
-                    variant="h4"
-                    component="h1"
+            {/* Personalized greeting and refresh button. */}
+            <Box
+                sx={{
+                    mb: 4,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: {
+                        xs: "flex-start",
+                        sm: "center",
+                    },
+                    flexDirection: {
+                        xs: "column",
+                        sm: "row",
+                    },
+                    gap: 2,
+                }}
+            >
+                <Box>
+                    <Typography
+                        variant="h4"
+                        component="h1"
+                        sx={{
+                            color: "#174D43",
+                            fontWeight: 800,
+                            mb: 1,
+                        }}
+                    >
+                        {trainerName
+                            ? `Welcome back, ${trainerName}!`
+                            : "Welcome back!"}
+                    </Typography>
+
+                    <Typography color="text.secondary">
+                        Here's an overview of your customers,
+                        training activity, and goals.
+                    </Typography>
+
+                    <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 1 }}
+                    >
+                        {dayjs().format("dddd, DD MMMM YYYY")}
+                    </Typography>
+                </Box>
+
+                {/* Refresh retrieves goal changes and the latest
+                    customer/training information. */}
+                <Button
+                    variant="outlined"
+                    disabled={loading}
+                    onClick={() =>
+                        setRefreshKey((previous) => previous + 1)
+                    }
                     sx={{
+                        borderColor: "#174D43",
                         color: "#174D43",
-                        fontWeight: 800,
-                        mb: 1,
+                        fontWeight: 700,
+                        "&:hover": {
+                            borderColor: "#174D43",
+                            bgcolor: "#E8F5D6",
+                        },
                     }}
                 >
-                    {trainerName
-                        ? `Welcome back, ${trainerName}!`
-                        : "Welcome back!"}
-                </Typography>
-
-                <Typography color="text.secondary">
-                    Your customers and university training
-                    activity at a glance.
-                </Typography>
-
-                <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 1 }}
-                >
-                    {dayjs().format("dddd, DD MMMM YYYY")}
-                </Typography>
+                    Refresh Dashboard
+                </Button>
             </Box>
 
-            {/* A failed request must not be displayed as zero data. */}
+            {/* Show API problems clearly. */}
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }}>
                     {error}
                 </Alert>
             )}
 
-            {/* Wait for both APIs before displaying the dashboard. */}
+            {warning && !error && (
+                <Alert severity="warning" sx={{ mb: 3 }}>
+                    {warning}
+                </Alert>
+            )}
+
             {loading ? (
                 <Box
                     sx={{
@@ -342,7 +513,7 @@ export const HomePage = () => {
                 </Box>
             ) : !error ? (
                 <>
-                    {/* Summary cards with live data. */}
+                    {/* Real dashboard statistics. */}
                     <Grid container spacing={3} sx={{ mb: 5 }}>
                         {metrics.map((metric) => (
                             <Grid
@@ -395,114 +566,156 @@ export const HomePage = () => {
                         ))}
                     </Grid>
 
-                    {/* Upcoming university training sessions. */}
+                    {/* Upcoming goals, not unrelated training
+                        sessions or historical training records. */}
                     <Box sx={{ mb: 3 }}>
                         <Typography
                             variant="h5"
+                            component="h2"
                             sx={{
                                 color: "#174D43",
                                 fontWeight: 800,
                                 mb: 1,
                             }}
                         >
-                            Upcoming Training Sessions
+                            Upcoming Customer Goals
                         </Typography>
 
                         <Typography
                             variant="body2"
                             color="text.secondary"
                         >
-                            The next five scheduled sessions from
-                            the university training API.
+                            The next five active goals with
+                            approaching target dates.
                         </Typography>
                     </Box>
 
-                    {upcomingTrainings.length === 0 ? (
+                    {upcomingGoals.length === 0 ? (
                         <Alert severity="info">
-                            No upcoming training sessions
-                            are currently scheduled.
+                            No upcoming goal deadlines are
+                            currently scheduled.
                         </Alert>
                     ) : (
                         <Stack spacing={2}>
-                            {upcomingTrainings.map((training) => (
+                            {upcomingGoals.map((goal) => (
                                 <Paper
-                                    key={training.id}
+                                    key={`${goal.assignmentId}-${goal.id}`}
                                     elevation={0}
                                     sx={{
-                                        p: 3,
                                         borderRadius: 3,
                                         border: "1px solid",
                                         borderColor: "divider",
                                         borderLeft:
                                             "4px solid #9BE564",
+                                        overflow: "hidden",
                                     }}
                                 >
-                                    <Box
-                                        sx={{
-                                            display: "flex",
-                                            justifyContent:
-                                                "space-between",
-                                            alignItems: {
-                                                xs: "flex-start",
-                                                sm: "center",
-                                            },
-                                            flexDirection: {
-                                                xs: "column",
-                                                sm: "row",
-                                            },
-                                            gap: 2,
-                                        }}
+                                    {/* Clicking a goal opens the
+                                        correct assigned customer's
+                                        existing Goals page. */}
+                                    <CardActionArea
+                                        onClick={() =>
+                                            navigate(
+                                                `/my-customers/${goal.assignmentId}/goals`
+                                            )
+                                        }
+                                        sx={{ p: 3 }}
                                     >
-                                        {/* Activity and customer details. */}
-                                        <Box>
-                                            <Typography
-                                                variant="h6"
+                                        <Box
+                                            sx={{
+                                                display: "flex",
+                                                justifyContent:
+                                                    "space-between",
+                                                alignItems: {
+                                                    xs: "flex-start",
+                                                    sm: "center",
+                                                },
+                                                flexDirection: {
+                                                    xs: "column",
+                                                    sm: "row",
+                                                },
+                                                gap: 2,
+                                            }}
+                                        >
+                                            <Box>
+                                                <Typography
+                                                    variant="h6"
+                                                    sx={{
+                                                        color: "#174D43",
+                                                        fontWeight: 700,
+                                                    }}
+                                                >
+                                                    {goal.title}
+                                                </Typography>
+
+                                                <Typography
+                                                    variant="body2"
+                                                    color="text.secondary"
+                                                    sx={{ mt: 0.5 }}
+                                                >
+                                                    Customer:{" "}
+                                                    {goal.customerName}
+                                                </Typography>
+
+                                                {goal.description && (
+                                                    <Typography
+                                                        variant="body2"
+                                                        sx={{ mt: 1 }}
+                                                    >
+                                                        {goal.description}
+                                                    </Typography>
+                                                )}
+
+                                                {goal.targetSessions !== null && (
+                                                    <Typography
+                                                        variant="body2"
+                                                        color="text.secondary"
+                                                        sx={{ mt: 1 }}
+                                                    >
+                                                        Target sessions:{" "}
+                                                        {goal.targetSessions}
+                                                    </Typography>
+                                                )}
+                                            </Box>
+
+                                            <Box
                                                 sx={{
-                                                    color: "#174D43",
-                                                    fontWeight: 700,
+                                                    display: "flex",
+                                                    flexDirection: "column",
+                                                    alignItems: {
+                                                        xs: "flex-start",
+                                                        sm: "flex-end",
+                                                    },
+                                                    gap: 1,
                                                 }}
                                             >
-                                                {training.activity}
-                                            </Typography>
+                                                <Chip
+                                                    label="Active"
+                                                    size="small"
+                                                    sx={{
+                                                        bgcolor: "#E8F5D6",
+                                                        color: "#174D43",
+                                                        fontWeight: 700,
+                                                    }}
+                                                />
 
-                                            <Typography
-                                                variant="body2"
-                                                color="text.secondary"
-                                            >
-                                                Customer:{" "}
-                                                {training.customerName}
-                                            </Typography>
-
-                                            <Typography
-                                                variant="body2"
-                                                color="text.secondary"
-                                                sx={{ mt: 1 }}
-                                            >
-                                                {dayjs(
-                                                    training.date
-                                                ).format(
-                                                    "DD.MM.YYYY HH:mm"
-                                                )}
-                                            </Typography>
+                                                <Typography
+                                                    variant="body2"
+                                                    sx={{
+                                                        color: "#174D43",
+                                                        fontWeight: 700,
+                                                    }}
+                                                >
+                                                    Due{" "}
+                                                    {dayjs(
+                                                        goal.targetDate
+                                                    ).format(
+                                                        "DD.MM.YYYY"
+                                                    )}
+                                                </Typography>
+                                            </Box>
                                         </Box>
-
-                                        {/* Duration of the session. */}
-                                        <Chip
-                                            label={
-                                                Number.isFinite(
-                                                    training.duration
-                                                ) &&
-                                                    training.duration > 0
-                                                    ? `${training.duration} min`
-                                                    : "Duration unavailable"
-                                            }
-                                            sx={{
-                                                bgcolor: "#E8F5D6",
-                                                color: "#174D43",
-                                                fontWeight: 700,
-                                            }}
-                                        />
-                                    </Box>
+                                    </CardActionArea>
                                 </Paper>
                             ))}
                         </Stack>
