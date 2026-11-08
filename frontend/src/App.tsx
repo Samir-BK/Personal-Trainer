@@ -29,6 +29,7 @@ import { CustomerGoals } from "./pages/CustomerGoals";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { TrainingCalendar } from "./pages/TrainingCalendar";
+import { TrainingStatistics } from "./pages/TrainingStatistics";
 
 // ProtectedRoute prevents unauthenticated users from accessing private pages.
 // NavigationActions displays navigation links and the logout control.
@@ -331,7 +332,12 @@ export function App() {
                   path="/calendar"
                   element={
                     <TrainingCalendar />
-
+                  }
+                />
+                <Route
+                  path="/statistics"
+                  element={
+                    <TrainingStatistics />
                   }
                 />
               </Route>
