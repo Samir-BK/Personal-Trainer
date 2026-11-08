@@ -22,7 +22,8 @@ const navigationItems = [
   { label: "My Customers", path: "/my-customers" },
   { label: "Trainings", path: "/trainings" },
   { label: "Calendar", path: "/calendar"},
-  {label: "Statistics", path: "/statistics"}
+  {label: "Statistics", path: "/statistics"},
+  {label: "My Profile", path: "/profile"},
 ];
 
 export function NavigationActions() {
