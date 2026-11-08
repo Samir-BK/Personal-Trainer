@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useSearchParams } from "react-router-dom";
 
 // Material UI provides accessible layout, status messages, and table controls.
 import {
@@ -50,12 +50,26 @@ type AssignedCustomerRow = Customer & {
 };
 
 export const MyCustomers = () => {
+    const [searchParams] = useSearchParams();
+    const customerIdParam = searchParams.get("customerId");
+    const selectedCustomerId =
+        customerIdParam !== null && /^\d+$/.test(customerIdParam)
+            ? Number(customerIdParam)
+            : null;
+
     // Display only customers assigned to the authenticated trainer.
     const [rows, setRows] = useState<AssignedCustomerRow[]>([]);
 
     // Keep loading and error feedback separate from the data itself.
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+
+    const displayedRows =
+        selectedCustomerId === null
+            ? rows
+            : rows.filter(
+                  (row) => row.universityCustomerId === selectedCustomerId
+              );
 
     // Load the trainer's assignments and current university customer details.
     useEffect(() => {
@@ -260,28 +274,43 @@ export const MyCustomers = () => {
                             Assigned Customers
                         </Typography>
                         <Chip
-                            label={`${rows.length} ${rows.length === 1 ? "customer" : "customers"}`}
+                            label={`${displayedRows.length} ${displayedRows.length === 1 ? "customer" : "customers"}`}
                             sx={{ bgcolor: "#E8F5E1", color: "#174D43", fontWeight: 800 }}
                         />
                     </Stack>
 
                     {/* A helpful empty state explains how to assign the first customer. */}
-                    {rows.length === 0 ? (
+                    {displayedRows.length === 0 ? (
                         <Box sx={{ textAlign: "center", py: 7, px: 2 }}>
                             <Typography variant="h6" sx={{ color: "secondary.main", mb: 1 }}>
-                                No assigned customers yet
+                                {selectedCustomerId === null
+                                    ? "No assigned customers yet"
+                                    : "Assigned customer not found"}
                             </Typography>
                             <Typography color="text.secondary" sx={{ mb: 3 }}>
-                                Browse the customer directory and assign customers to your account.
+                                {selectedCustomerId === null
+                                    ? "Browse the customer directory and assign customers to your account."
+                                    : "This customer is not in your assigned customers list."}
                             </Typography>
-                            <Button
-                                component={RouterLink}
-                                to="/customers"
-                                variant="contained"
-                                sx={{ fontWeight: 700 }}
-                            >
-                                Browse Customers
-                            </Button>
+                            {selectedCustomerId === null ? (
+                                <Button
+                                    component={RouterLink}
+                                    to="/customers"
+                                    variant="contained"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    Browse Customers
+                                </Button>
+                            ) : (
+                                <Button
+                                    component={RouterLink}
+                                    to="/my-customers"
+                                    variant="contained"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    View all my customers
+                                </Button>
+                            )}
                         </Box>
                     ) : (
                         // A horizontal scroll wrapper keeps every column and the
@@ -289,7 +318,7 @@ export const MyCustomers = () => {
                         <Box sx={{ width: "100%", overflowX: "auto" }}>
                             <Box sx={{ minWidth: 950, height: 550 }}>
                                 <DataGrid
-                                    rows={rows}
+                                    rows={displayedRows}
                                     columns={columns}
                                     // The assignment ID is unique to this trainer's row.
                                     getRowId={(row) => row.assignmentId}
