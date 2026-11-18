@@ -1,455 +1,388 @@
-# Frontend — Personal Trainer Management System
+# Personal Trainer Management System — Frontend
 
-React + TypeScript interface for the **Personal Trainer Management System**. This frontend combines the university's customer/training REST API with trainer-specific assignments and fitness goals stored by our Spring Boot backend.
+React and TypeScript frontend for managing trainer accounts, customer assignments, fitness goals, and training sessions. A Spring Boot backend provides session authentication and trainer-owned assignments and goals; the university REST API supplies the shared customer directory and training records.
 
-> **Repository location:** Save this document as `frontend/README.md`. The root `README.md` describes the whole application; `backend/README.md` documents the Java service, security, and database.
+**Live application:** [Personal Trainer Management System](https://personal-trainer-five-delta.vercel.app)
+
+**Backend:** [Spring Boot on Render](https://personal-trainer-backend-6mai.onrender.com)
+
+See the [project README](../README.md) for the full-stack overview and the [backend README](../backend/README.md) for backend setup and API documentation.
 
 ## Contents
 
-1. [What the frontend does](#what-the-frontend-does)
-2. [Technology stack](#technology-stack)
-3. [Architecture and data sources](#architecture-and-data-sources)
-4. [Application routes](#application-routes)
-5. [Project structure](#project-structure)
-6. [Installation and local development](#installation-and-local-development)
-7. [Authentication and security](#authentication-and-security)
-8. [Customer assignments and fitness goals](#customer-assignments-and-fitness-goals)
-9. [Design system and responsive UI](#design-system-and-responsive-ui)
-10. [Testing and quality checks](#testing-and-quality-checks)
-11. [Production build and deployment notes](#production-build-and-deployment-notes)
-12. [Troubleshooting](#troubleshooting)
-13. [Planned work](#planned-work)
+- [Features](#features)
+- [Technology stack](#technology-stack)
+- [Architecture and data sources](#architecture-and-data-sources)
+- [Application routes](#application-routes)
+- [Project structure](#project-structure)
+- [Local development](#local-development)
+- [Authentication and security](#authentication-and-security)
+- [Design system](#design-system)
+- [Testing and quality](#testing-and-quality)
+- [Deployment](#deployment)
+- [Known limitations](#known-limitations)
 
-## What the frontend does
+## Features
 
-The application is designed for personal trainers to:
+### Trainer accounts
 
-- **Register and sign in** using the Spring Boot backend.
-- **Browse the university customer directory** and see customer contact information.
-- **Assign or remove customers** from their own trainer account.
-- **View My Customers**, a trainer-specific list of assigned customers.
-- **Create and manage fitness goals** for an assigned customer, including a title, description, target date, target session count, and status (`ACTIVE`, `COMPLETED`, or `CANCELLED`).
-- **Browse training sessions** from the university API, including activity, duration, date/time, and associated customer.
+- Register with first name, last name, email, and password; successful registration returns to login without signing in automatically.
+- Sign in, sign out, and access protected application routes.
+- View and refresh a read-only trainer profile with name, email, and account type.
 
-Assignments and fitness goals are **private to the logged-in trainer**. The frontend displays only the relevant information, while the backend independently enforces ownership.
+### Home Dashboard
 
-### Current feature status
+- Personalized trainer greeting and a dashboard refresh action.
+- Assigned customer count and active goal count for the authenticated trainer. The customer count includes assignments that still match a university directory record.
+- Training session count and total training minutes from **all records returned by the university API**, independent of the trainer's assignments. Only positive, finite durations contribute to the minute total.
+- Up to five active goal deadlines, ordered nearest first and including today. Undated and overdue goals remain in the active count but are excluded from the upcoming list.
+- A warning if some goal requests fail and the displayed goal totals may be incomplete.
 
-| Area | Implemented |
-| --- | --- |
-| Trainer registration / login / logout | Yes |
-| Protected client-side routes | Yes |
-| University customer directory | Yes |
-| Assign / remove a customer | Yes |
-| List assigned customers | Yes |
-| Create, edit, delete, and change goal status | Yes |
-| University training list | Yes |
-| Responsive green Material UI theme | Yes |
-| Export customers to CSV | Planned |
-| Training calendar (month/week/day) | Planned |
-| Training statistics charts | Postponed |
-| Production cloud deployment | Planned / verify deployment status |
+### Customer management
 
-This table describes the current project scope discussed during development. Update it when features are implemented.
+- Browse university customer contact details; search by field through Data Grid column filters, sort columns, filter records, and paginate with 10, 25, or 50 rows per page.
+- Add, edit, and delete university customers, with form validation and deletion confirmation.
+- Assign university customers to the logged-in trainer or remove their assignments from the directory.
+- View matched assigned customers on **My Customers** and open their fitness goals.
+- Export customer contact data as `CustomerList.csv`. Export includes all loaded directory records, rather than just the visible page or filtered rows.
+
+Customer changes affect the **shared university directory**. Removing a trainer assignment is a separate Spring Boot operation and does not delete the university customer.
+
+### Fitness goals
+
+- Create, view, edit, and delete goals for a customer assignment.
+- Supply a required title and optional description, target date, and positive integer session target.
+- Change status between `ACTIVE`, `COMPLETED`, and `CANCELLED`.
+- Receive loading, validation, success, and error feedback; deletion requires confirmation.
+- Spring Boot enforces assignment and goal ownership using the authenticated trainer.
+
+### Training management
+
+- Browse university training sessions with date/time, activity, duration, and associated customer information.
+- Create sessions for university customers using a date/time picker.
+- Delete sessions after confirmation. Existing sessions cannot be edited.
+
+### Training calendar and statistics
+
+- Read-only **MUI X Scheduler** calendar with Month, Week, and Day views and selectable event details, including activity, customer, and duration. Event end times use the session duration.
+- **MUI X Charts** horizontal bar chart showing total training minutes grouped by activity. Names are trimmed and grouped without case sensitivity; missing activities and invalid or nonpositive durations are excluded. Activities are ordered by total minutes.
+- Both pages use **shared university training data**, rather than only sessions for the trainer's assigned customers.
+
+### Interface
+
+Responsive Material UI layouts, desktop links and mobile navigation menu, Data Grid tables, dialogs, loading indicators, empty states, validation feedback, and API error handling support the application pages.
 
 ## Technology stack
 
-- **React 19** — component-based UI.
-- **TypeScript** — types for components, API data, and form values.
-- **Vite 8** — development server and production bundling.
-- **React Router 7** — routes, navigation, and protected page layout.
-- **Material UI (MUI)** — layout, form components, buttons, dialogs, alerts, and theme.
-- **MUI X Data Grid** — paginated customer and training tables.
-- **Axios** — HTTP requests.
-- **Day.js** — formatting training dates and times.
-- **ESLint** — code quality checks.
+The following are the declared version ranges in [package.json](package.json); [package-lock.json](package-lock.json) records resolved versions.
 
-Exact installed dependency versions are maintained in [`package.json`](./package.json) and [`package-lock.json`](./package-lock.json).
+| Technology / package | Declared version | Purpose |
+| --- | --- | --- |
+| React / React DOM (`react`, `react-dom`) | `^19.3.1` | UI rendering |
+| TypeScript (`typescript`) | `~6.0.2` | Static typing |
+| Vite (`vite`) | `^8.1.1` | Development server and production build |
+| React Router (`react-router-dom`) | `^7.18.4` | Client routes and navigation |
+| Material UI (`@mui/material`, `@mui/icons-material`) | `^9.5.0` | Components, theme, icons |
+| Emotion (`@emotion/react` / `@emotion/styled`) | `^11.14.0` / `^11.14.1` | MUI styling |
+| MUI X Data Grid (`@mui/x-data-grid`) | `^9.15.0` | Tables, sorting, filtering, pagination |
+| MUI X Scheduler (`@mui/x-scheduler`) | `^9.0.0-beta.15` | Training calendar |
+| MUI X Charts (`@mui/x-charts`) | `^9.17.0` | Training statistics |
+| MUI X Date Pickers (`@mui/x-date-pickers`) | `^9.17.0` | Training date/time selection |
+| Axios (`axios`) | `^1.20.0` | API requests |
+| Day.js (`dayjs`) | `^1.11.23` | Date handling and formatting |
+| ESLint (`eslint`) | `^10.6.0` | Lint checks |
 
 ## Architecture and data sources
 
-**This frontend talks to two different services.** They have different purposes and should not be confused.
-
 ```mermaid
 flowchart LR
-    U[Trainer in browser] --> R[React + TypeScript frontend]
-    R -->|Customers and trainings| A[University HAL REST API]
-    R -->|Session auth, assignments, goals| B[Spring Boot backend]
+    U[Trainer in browser] --> R[React and TypeScript frontend]
+    R -->|Shared customers and trainings| A[University HAL REST API]
+    R -->|Session authentication, assignments, goals| B[Spring Boot REST API]
     B --> D[(PostgreSQL)]
     B -->|Validate university customer ID| A
 ```
 
-### University REST API
+### Two API connections
 
-Public customer and training records are retrieved from the university service:
+| API | Frontend configuration | Data responsibility |
+| --- | --- | --- |
+| University REST API | `VITE_TRAINER_API` in `trainerService.ts` | Shared customers and training sessions |
+| Spring Boot REST API | Relative `/api` base URL with credentials | Accounts, authentication, trainer assignments, fitness goals |
 
-`https://customer-rest-service-frontend-personaltrainer.2.rahtiapp.fi/api`
+The university base URL for direct local access is `https://customer-rest-service-frontend-personaltrainer.2.rahtiapp.fi/api/`. Collection responses use HAL `_embedded.customers` and `_embedded.trainings`, with `_links` identifying individual and related resources.
 
-Typical resources include `customers` and `trainings`. The responses use **HAL links**, including `_links.self.href` and links to related resources. The frontend extracts customer IDs from HAL self-links because a customer may not have a normal top-level `id` field.
+Customer IDs are parsed from numeric `/customers/{id}` HAL self-links, since customer objects do not expose a normal top-level ID. Training customer links may instead use `/trainings/{id}/customer`. `fetchCustomersByURL` validates HTTP(S) links and these supported resource paths, then requests the path through the configured university Axios client. This keeps production relationship requests behind the Vercel proxy instead of following absolute HAL URLs directly.
 
-### Our Spring Boot REST API
+Spring Boot stores trainer accounts, assignments, and goals in PostgreSQL. Customer contact details and training sessions stay in the university service; the browser never connects directly to the database.
 
-Our backend manages:
+### Assignment identifiers and request flow
 
-- Trainer registration and authenticated sessions.
-- Customer assignments belonging to the currently authenticated trainer.
-- Fitness goals belonging to a trainer-customer assignment.
-- Server-side validation and authorization.
-
-The backend uses PostgreSQL. The browser does **not** connect to PostgreSQL directly.
-
-### Request flow: viewing assigned customers
+- `universityCustomerId` identifies a customer in the university service.
+- `assignmentId` identifies the trainer-customer relationship in PostgreSQL. Assignment responses expose this as `id`; goal responses include `assignmentId`.
+- `/my-customers/:assignmentId/goals` uses the **assignment ID**. Spring Boot derives the trainer identity from the session and checks ownership.
 
 ```mermaid
 sequenceDiagram
     actor Trainer
-    participant UI as MyCustomers.tsx
+    participant UI as MyCustomers component
     participant Backend as Spring Boot
     participant University as University API
-
     Trainer->>UI: Open My Customers
-    UI->>Backend: GET /api/trainer-customers (session cookie)
+    UI->>Backend: GET /api/trainer-customers with session cookie
     Backend-->>UI: Assignment IDs and university customer IDs
-    UI->>University: GET customer directory
-    University-->>UI: Customer records with HAL links
-    UI->>UI: Match records by university customer ID
-    UI-->>Trainer: Render assigned customers and Manage Goals links
+    UI->>University: GET customers
+    University-->>UI: Customer records and HAL links
+    UI->>UI: Match assignments to customers by university ID
+    UI-->>Trainer: Show matched customers and Manage Goals links
+    Trainer->>UI: Open goals for assignmentId
+    UI->>Backend: GET /api/trainer-customers/{assignmentId}/goals
+    Backend->>Backend: Verify authenticated trainer owns assignment
+    Backend-->>UI: Goals or access error
 ```
-
-**Two different identifiers are used:**
-
-- `universityCustomerId` identifies the person in the university API.
-- `assignmentId` identifies the association between a trainer and that person in our PostgreSQL database.
-
-The Fitness Goals route uses **`assignmentId`**, not `universityCustomerId`.
 
 ## Application routes
 
-| URL | Component | Access | Purpose |
+Routes are defined in [src/App.tsx](src/App.tsx).
+
+| Path | Component | Access | Page |
 | --- | --- | --- | --- |
-| `/login` | `LoginPage` | Public | Sign in |
-| `/register` | `RegisterPage` | Public | Create trainer account |
-| `/` | `CustomerList` | Protected | Default customer directory |
-| `/customers` | `CustomerList` | Protected | Browse and assign university customers |
-| `/my-customers` | `MyCustomers` | Protected | See this trainer's assignments |
-| `/my-customers/:assignmentId/goals` | `CustomerGoals` | Protected | Manage goals for one assignment |
-| `/trainings` | `TrainingList` | Protected | Browse university training sessions |
+| `/` | `HomePage` | Protected | Home Dashboard |
+| `/login` | `LoginPage` | Public | Login |
+| `/register` | `RegisterPage` | Public | Registration |
+| `/customers` | `CustomerList` | Protected | Customer Directory |
+| `/my-customers` | `MyCustomers` | Protected | Assigned Customers |
+| `/my-customers/:assignmentId/goals` | `CustomerGoals` | Protected | Fitness Goals |
+| `/trainings` | `TrainingList` | Protected | Training List |
+| `/calendar` | `TrainingCalendar` | Protected | Training Calendar |
+| `/statistics` | `TrainingStatistics` | Protected | Training Statistics |
+| `/profile` | `TrainerProfile` | Protected | Trainer Profile |
 
-`ProtectedRoute` handles frontend navigation decisions. **It is not a security boundary by itself**: Spring Security protects backend endpoints regardless of what the React UI displays.
-
-### Component map
+`MyCustomers` is exported from `src/pages/MyCustomer.tsx` (singular filename).
 
 ```mermaid
 flowchart TD
-    A[main.tsx] --> B[App.tsx]
-    B --> T[Material UI ThemeProvider]
-    T --> N[NavigationActions]
-    T --> RT[React Router Routes]
-    RT --> L[LoginPage]
-    RT --> RG[RegisterPage]
-    RT --> P[ProtectedRoute]
+    M[main.tsx] --> A[App.tsx]
+    A --> T[ThemeProvider and CssBaseline]
+    T --> B[BrowserRouter and shared layout]
+    B --> N[NavigationActions]
+    N --> LO[LogoutButton]
+    B --> R[Routes]
+    R --> L[LoginPage]
+    R --> RG[RegisterPage]
+    R --> P[ProtectedRoute and Outlet]
+    P --> H[HomePage]
     P --> C[CustomerList]
     P --> MC[MyCustomers]
     P --> G[CustomerGoals]
     P --> TR[TrainingList]
-    N --> LO[LogoutButton]
+    P --> CA[TrainingCalendar]
+    P --> S[TrainingStatistics]
+    P --> PR[TrainerProfile]
 ```
 
 ## Project structure
 
-The main files are organized as follows (this is a **focused view**, not a complete directory listing):
+Focused view of the frontend source and configuration:
 
 ```text
 frontend/
 ├── README.md
 ├── package.json
 ├── package-lock.json
-├── index.html
-├── vite.config.ts
-├── tsconfig.json                 # TypeScript configuration files may vary
-├── src/
-│   ├── main.tsx                  # React entry point
-│   ├── App.tsx                   # Global theme, navigation layout, routes
-│   ├── index.css                 # Global resets and base styles
-│   ├── components/
-│   │   ├── NavigationActions.tsx # Responsive navbar and active route state
-│   │   ├── LogoutButton.tsx      # Logout action
-│   │   └── ProtectedRoute.tsx    # Authentication gate for private pages
-│   ├── pages/
-│   │   ├── LoginPage.tsx
-│   │   ├── RegisterPage.tsx
-│   │   ├── CustomerList.tsx
-│   │   ├── MyCustomers.tsx
-│   │   ├── CustomerGoals.tsx
-│   │   └── TrainingList.tsx
-│   ├── services/
-│   │   ├── authService.ts
-│   │   ├── trainerService.ts
-│   │   ├── trainerCustomerService.ts
-│   │   └── customerGoalService.ts
-│   └── types/
-│       └── trainer.ts            # University customer/training types
-└── dist/                         # Generated by npm run build; do not commit
+├── index.html                    # Application title and React mount point
+├── vite.config.ts                # Development /api proxy
+├── vercel.json                   # Production proxies and SPA fallback
+├── eslint.config.js
+├── tsconfig.json
+├── tsconfig.app.json
+├── tsconfig.node.json
+└── src/
+    ├── main.tsx
+    ├── App.tsx                   # Theme, shared layout, routes
+    ├── App.css
+    ├── index.css                 # Base styles and calendar detail override
+    ├── components/
+    │   ├── NavigationActions.tsx
+    │   ├── LogoutButton.tsx
+    │   └── ProtectedRoute.tsx
+    ├── pages/
+    │   ├── HomePage.tsx
+    │   ├── LoginPage.tsx
+    │   ├── RegisterPage.tsx
+    │   ├── TrainerProfile.tsx
+    │   ├── CustomerList.tsx
+    │   ├── MyCustomer.tsx         # Exports MyCustomers
+    │   ├── CustomerGoals.tsx
+    │   ├── TrainingList.tsx
+    │   ├── TrainingCalendar.tsx
+    │   └── TrainingStatistics.tsx
+    ├── services/
+    │   ├── authService.ts
+    │   ├── trainerService.ts      # University customer/training operations
+    │   ├── trainerCustomerService.ts
+    │   └── customerGoalService.ts
+    └── types/
+        ├── trainer.ts            # University customer/training types
+        └── spring_trainer.ts     # Trainer and authentication types
 ```
 
-The **pages** contain the visible UI and event handling. **Services** isolate API calls. **Types** describe data formats. This separation helps keep individual pages focused on presentation and user interactions.
+Pages handle presentation and interactions, services provide API operations, and types describe API data. Dashboard and profile also make direct Axios requests to Spring Boot.
 
-## Installation and local development
+## Local development
 
 ### Prerequisites
 
-1. **Node.js and npm** compatible with your installed Vite version. Check `package.json` and the Vite version's Node.js engine requirement rather than assuming an older Node release will work.
-2. The **Spring Boot backend** running locally for registration, authentication, assignments, and goals.
-3. Internet/network access to the **university REST API** for customer and training data.
-4. PostgreSQL running for the backend (normally through the root `compose.yaml`).
-
-### Start the database and backend
-
-From the repository root, use your existing Docker Compose and Maven setup:
-
-```bash
-# Run from the repository root
-
-docker compose up -d
-
-cd backend
-./mvnw spring-boot:run
-```
-
-The backend must have its required environment variables configured (notably `DB_PASSWORD`). Refer to [`../backend/README.md`](../backend/README.md) for verified database connection details, migrations, and backend troubleshooting.
-
-### Install frontend dependencies
-
-Open a separate terminal:
-
-```bash
-cd frontend
-npm ci
-```
-
-Use `npm ci` when a lockfile exists so your dependencies match the repository's recorded versions.
+Use **Node.js 22.12 or later in the Node 22 series** and npm to align with CI's Node 22 configuration. The locked Vite package declares `^20.19.0 || >=22.12.0`; older Node versions are unsuitable. Network access to the university API and a reachable Spring Boot backend are required.
 
 ### Configure API access
 
-The university API client uses the Vite environment variable **`VITE_TRAINER_API`**. A typical local configuration in `frontend/.env.local` is:
+From the repository root, create `frontend/.env.local`:
 
 ```dotenv
 VITE_TRAINER_API=https://customer-rest-service-frontend-personaltrainer.2.rahtiapp.fi/api/
 ```
 
-The trailing slash is useful because the university API client requests relative paths such as `customers` and `trainings`.
+Keep the trailing slash for relative university resource paths. This variable configures the **university API**, not Spring Boot. The client throws an error if it is missing. Vite exposes `VITE_` values to the browser, so use them only for public configuration.
 
-**Backend API routing:** Authentication, assignment, and goal service files also require the Spring Boot API to be reachable. The exact local origin or Vite proxy setup depends on your current `vite.config.ts` and service implementations. **Verify those files before copying proxy or backend URL settings**; this README does not assume an unverified proxy exists.
+The checked-in [vite.config.ts](vite.config.ts) forwards `/api` to `https://personal-trainer-backend-6mai.onrender.com`. You can use that deployed backend without starting a local backend or database.
 
-Only environment values prefixed with `VITE_` are exposed to browser code. **Never put passwords, API secrets, database credentials, or session secrets in Vite frontend variables.**
+To use local Spring Boot instead, change the existing `/api` proxy target to:
 
-### Start the development server
+```ts
+"/api": {
+  target: 'http://localhost:8080',
+  changeOrigin: true,
+  secure: true,
+}
+```
+
+Start PostgreSQL and Spring Boot using **one** of the workflows in the [backend local development guide](../backend/README.md#local-development). Docker Compose can start both services; the Maven alternative starts only the database through Compose and runs Spring Boot separately. Do not start a second backend on port 8080.
+
+Only `/api` is proxied by the Vite development configuration. Use the absolute university URL above locally; `/university-api/` is configured by Vercel for production.
+
+### Install and run
+
+From the repository root, in a separate terminal:
 
 ```bash
+cd frontend
+npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite (typically `http://localhost:5173/`). The development server supports hot reload as you edit React components.
-
-### Common commands
+`npm ci` installs the lockfile's recorded dependency versions. Open the URL printed by Vite, normally `http://localhost:5173`. Restart Vite after environment or proxy changes.
 
 | Command | Purpose |
 | --- | --- |
-| `npm ci` | Install the exact dependencies in the lockfile |
-| `npm run dev` | Start the development server |
-| `npm run lint` | Check lint rules |
-| `npm run build` | Type-check and create a production build |
-| `npm run preview` | Preview the built frontend locally |
+| `npm ci` | Install locked dependencies |
+| `npm run dev` | Start Vite with hot reload and the development proxy |
+| `npm run lint` | Run ESLint |
+| `npm run build` | Run `tsc -b`, then build static assets with Vite |
+| `npm run preview` | Preview the generated build locally |
+
+`npm run preview` is a static build preview, not the Vercel runtime; it does not apply `vercel.json` rewrites. Use the development server or deployed application for API integration checks.
 
 ## Authentication and security
 
-Authentication is managed by **Spring Security on the backend**, using a server-side session and a browser cookie. The frontend does not implement its own authentication tokens or use local storage for a bearer token.
-
-### Login flow
+Spring Security manages server-side sessions, using a browser session cookie (`JSESSIONID`). Spring Boot Axios requests include `withCredentials: true`; the frontend does not use a local-storage bearer token.
 
 ```mermaid
 sequenceDiagram
     actor Trainer
     participant Login as LoginPage
     participant Auth as authService
-    participant API as Spring Security backend
-
-    Trainer->>Login: Enter email and password
+    participant API as Spring Boot and Spring Security
+    Trainer->>Login: Submit email and password
     Login->>Auth: login(credentials)
-    Auth->>API: Request CSRF token
-    API-->>Auth: CSRF token / cookie context
-    Auth->>API: Submit credentials with CSRF protection
-    API-->>Auth: Authenticated session cookie
+    Auth->>API: GET /api/csrf
+    API-->>Auth: CSRF token and header name
+    Auth->>API: POST /api/trainers/login with CSRF header
+    API-->>Auth: Trainer details and authenticated session cookie
     Login->>Auth: getCurrentTrainer()
-    Auth->>API: Check authenticated session
-    API-->>Auth: Current trainer details
-    Login-->>Trainer: Navigate to /customers
+    Auth->>API: GET /api/trainers/me with session cookie
+    API-->>Auth: Current trainer
+    Login-->>Trainer: Navigate to Home Dashboard at /
 ```
 
-**Frontend responsibilities:**
+Authentication operations obtain a CSRF token from `/api/csrf` and send it with the response-specified header name. Assignment and goal mutations also fetch a token and send `X-XSRF-TOKEN`. Registration is public but still requires CSRF protection. Logout obtains a token, posts to `/api/trainers/logout`, and returns to `/login` after success.
 
-- Present login and registration forms, validation feedback, and loading indicators.
-- Include credentials/session cookies and CSRF protection as required by the backend service.
-- Verify the current session when protected pages are accessed.
-- Navigate to login when a valid session is not available.
-- Keep trainer IDs out of client-supplied ownership decisions.
+`ProtectedRoute` checks `/api/trainers/me`, shows a loading indicator while checking, renders an `Outlet` after success, and redirects to `/login` on failure. This controls client navigation. **Actual API authorization and trainer ownership are enforced by Spring Boot**, which also validates inputs and hashes passwords with BCrypt. University API operations use their separate client and are subject to that external service's controls.
 
-**Backend responsibilities:**
+## Design system
 
-- Validate credentials and passwords.
-- Hash passwords using BCrypt.
-- Maintain authenticated sessions.
-- Enforce CSRF validation for state-changing requests.
-- Check that each assignment and goal belongs to the authenticated trainer.
+[src/App.tsx](src/App.tsx) defines a light Material UI theme with rounded components and Roboto/Arial typography:
 
-The application checks authentication before revealing protected pages, but a user can still make direct HTTP requests. **Only backend authorization prevents unauthorized access.**
+| Theme token | Color |
+| --- | --- |
+| Primary / lime | `#9BE564` |
+| Secondary / forest | `#174D43` |
+| Page background | `#F7FAF5` |
+| Paper | `#FFFFFF` |
+| Main text | `#253B35` |
+| Secondary text | `#718079` |
+| Success / error | `#39845E` / `#D94F55` |
 
-### Registration flow
+Desktop navigation uses horizontal links; below the MUI `md` breakpoint it becomes a menu with logout still accessible. Navigation is hidden on login and registration pages. Authentication layouts adapt from image/form panels to a compact form on small screens. Tables use horizontal scrolling where needed; forms, cards, charts, and dialogs use responsive spacing.
 
-Registration submits the trainer's first name, last name, email, and password through `authService.register`. Successful registration navigates to `/login`; registration does **not** sign the trainer in automatically.
+[src/index.css](src/index.css) supplies resets, a 320px minimum body width, responsive images, and a calendar detail override hiding the unused resource row. Its base body color is `#f8fafc`; the MUI theme and application wrapper supply the visible themed page background.
 
-### Security details worth retaining
+## Testing and quality
 
-- Keep `withCredentials`/cookie handling consistent with the authentication service and CORS configuration.
-- Never store a raw password beyond the form's transient state.
-- Avoid hardcoding session cookies or CSRF tokens.
-- Keep the production frontend and backend origin/proxy strategy compatible with browser cookie policies.
-- Use HTTPS in production.
-
-## Customer assignments and fitness goals
-
-### Customer directory — `CustomerList.tsx`
-
-The directory combines university customer records with the authenticated trainer's assignments:
-
-1. Load university customers from `trainerService`.
-2. Load trainer assignments from `trainerCustomerService`.
-3. Extract each university customer ID from its HAL self-link.
-4. Show an **Assign** action for unassigned customers, or **Remove** for those currently assigned.
-5. Update the local table state after successful backend operations.
-
-Assignments are stored in the project's PostgreSQL database, **not** written back to the university API.
-
-### My Customers — `MyCustomers.tsx`
-
-The page loads the trainer's assignment records and university customer details, then joins them by numeric university customer ID. Each **Manage Goals** button navigates using the backend `assignmentId`.
-
-### Customer fitness goals — `CustomerGoals.tsx`
-
-A trainer can:
-
-- Create a goal with title and optional description, date, or session target.
-- Edit an existing goal.
-- Change status to `ACTIVE`, `COMPLETED`, or `CANCELLED`.
-- Delete a goal after confirmation.
-
-The backend validates fields and ownership. The frontend also validates common mistakes for faster feedback.
-
-**Important:** A target session count is a **target**, not a calculated progress measurement. Automatic goal progress tracking and statistics have not been implemented; the UI should not imply otherwise.
-
-### Trainings — `TrainingList.tsx`
-
-The training list retrieves records from the university API and resolves linked customer names where possible. It displays the session date/time, duration (minutes), activity, and customer. Day.js formats date/time values for readability.
-
-Training records in this view originate from the **university API**, not the application's PostgreSQL goal tables.
-
-## Design system and responsive UI
-
-The application uses a consistent **green fitness theme** across authentication, navigation, and management pages.
-
-| Token | Color | Usage |
-| --- | --- | --- |
-| Lime green | `#9BE564` | Primary calls to action and highlights |
-| Forest green | `#174D43` | Navigation and headings |
-| Soft sage | `#E8F5E1` | Subtle status backgrounds |
-| Off-white | `#F7FAF5` | Page background |
-| Dark text | `#253B35` | Main text |
-
-Theme tokens are defined in `src/App.tsx` with Material UI's `createTheme` and applied using `ThemeProvider`. `src/index.css` provides global resets and base layout styles.
-
-- Login and registration use a split layout on larger screens, with a fitness image and a form panel. The image panel is hidden on smaller screens.
-- Desktop navigation displays links across the top bar; narrower screens use a compact menu.
-- MUI Data Grid supports large customer/training tables, including pagination and horizontal scrolling on small screens.
-- Goal forms/cards and confirmation dialogs use the same colors, spacing, and rounded corners.
-- Error, loading, and empty states should remain visible and understandable on phones and desktops.
-
-**Design guideline:** Use lime green for important interactions; avoid applying it to every surface. Keep text contrast readable.
-
-## Testing and quality checks
-
-Before committing frontend changes, run:
+Run from `frontend/`:
 
 ```bash
 npm run lint
 npm run build
 ```
 
+There is no frontend unit-test script or automated frontend unit-test suite in the repository. Build and lint checks do not replace browser integration testing.
+
+[GitHub Actions](../.github/workflows/ci.yml) runs on pushes and pull requests to `main`. The frontend job uses Node 22, runs `npm ci`, `npm run lint`, and `npm run build`. A separate backend job runs Maven tests with Java 21 and provisions PostgreSQL 17.
+
 ### Manual smoke-test checklist
 
-- [ ] Login with valid credentials and reach the customer directory.
-- [ ] Incorrect credentials show an error.
-- [ ] Registration works and returns to login.
-- [ ] Logged-out users cannot open private pages.
-- [ ] Customer Directory loads and Assign/Remove updates correctly.
-- [ ] My Customers shows only the logged-in trainer's assignments.
-- [ ] Manage Goals navigates to the correct assignment.
-- [ ] Goal creation, editing, status updates, and deletion work.
-- [ ] Unauthorized or invalid goal assignment URLs do not expose the editor.
-- [ ] Trainings load, dates are readable, and customer names resolve.
-- [ ] Navigation and data tables remain usable at narrow viewport widths.
-- [ ] Browser console has no unexpected errors.
+Use disposable university records for create/update/delete checks, since that data is shared.
 
-GitHub Actions also runs frontend lint/build checks as part of the repository CI workflow. Check the current workflow files in `.github/workflows/` for exact CI steps.
+- [ ] Registration validates input and returns to login; invalid login shows an error.
+- [ ] Successful login opens `/`; logout returns to `/login` and protected pages require a session.
+- [ ] Home greeting, assigned customer count, active goals, shared training totals, refresh, and up to five upcoming deadlines display correctly.
+- [ ] Customer Directory loads; field filtering/search, sorting, pagination, and CSV export work.
+- [ ] Customer creation, editing, deletion confirmation, assignment, and assignment removal work.
+- [ ] My Customers shows only matching assignments for the current trainer; Manage Goals uses the assignment ID.
+- [ ] Goals support creation, editing, optional fields, all three statuses, and deletion confirmation; invalid or another trainer's assignment URL does not expose goals.
+- [ ] Training List resolves customer information, creates sessions with date/time selection, and deletes only after confirmation.
+- [ ] Calendar supports Month, Week, and Day views and event details without allowing calendar edits.
+- [ ] Statistics aggregate university minutes by activity and show appropriate empty/error states.
+- [ ] Profile displays the logged-in trainer's read-only information and refreshes.
+- [ ] Desktop/mobile navigation, horizontally scrollable tables, dialogs, loading states, validation, and API errors remain usable at narrow widths.
+- [ ] Direct visits and refreshes on deployed nested routes work; the browser console shows no unexpected errors.
 
-> A successful frontend build does not replace browser checks against a running backend and the university API.
+## Deployment
 
-## Production build and deployment notes
+The completed frontend is deployed on [Vercel](https://personal-trainer-five-delta.vercel.app), with the [Spring Boot backend on Render](https://personal-trainer-backend-6mai.onrender.com).
 
-Create optimized static assets:
+For Vercel, use `frontend` as the project root, `npm run build` as the build command, and `dist` as the output directory. Set the public university API base URL **at build time**:
 
-```bash
-npm run build
+```dotenv
+VITE_TRAINER_API=/university-api/
 ```
 
-Vite writes the generated application to `dist/`. Host that directory on a static web server or compatible platform.
+Rebuild after changing Vite environment values. [vercel.json](vercel.json) applies these rewrites in order:
 
-Deployment requirements include:
-
-1. Set the correct university REST API URL at **build time** (Vite replaces `import.meta.env` values during build).
-2. Make the Spring Boot backend reachable from the deployed frontend.
-3. Configure HTTPS, backend CORS (if cross-origin), CSRF behavior, and session cookies for the deployed origins.
-4. Configure SPA routing so direct visits to `/login`, `/customers`, or other client routes serve `index.html` instead of a server-side 404.
-5. Test authentication and assignment/goal mutations after deployment.
-
-**No deployment platform or production URL is assumed here.** Add your actual URLs and configuration after deployment is completed.
-
-## Troubleshooting
-
-| Symptom | What to check |
+| Incoming path | Destination |
 | --- | --- |
-| `npm ci` fails | Node.js version, lockfile consistency, npm output |
-| Vite page opens but customer table is empty | `VITE_TRAINER_API`, university API availability, browser Network tab |
-| Backend requests fail | Spring Boot process, API base URL or proxy, backend logs |
-| Login returns 401 | Credentials and current session; inspect response without exposing passwords |
-| Mutations return 403 | CSRF header/cookie, session validity, and backend ownership rules |
-| Data Grid doesn't render rows correctly | Stable `getRowId`, correct HAL links, API response structure |
-| Refreshed nested route returns 404 after deployment | Static hosting SPA fallback to `index.html` |
-| Network request is blocked by the browser | CORS, HTTPS/mixed-content, cookie configuration |
-| `npm run build` fails | Read TypeScript compiler errors and confirm dependency versions |
+| `/university-api/:path*` | `https://customer-rest-service-frontend-personaltrainer.2.rahtiapp.fi/api/:path*` |
+| `/api/:path*` | `https://personal-trainer-backend-6mai.onrender.com/api/:path*` |
+| `/(.*)` | `/index.html` |
 
-For database, Flyway, Spring Security, and backend integration failures, see [`../backend/README.md`](../backend/README.md).
+The API rewrites let browser requests use the frontend origin while Vercel forwards them to the appropriate service. The final SPA fallback serves React for direct visits or refreshes on routes such as `/calendar` and `/my-customers/1/goals`. Vite's development proxy is separate from these production rewrites.
 
-## Planned work
+## Known limitations
 
-The following items are **not presented as completed**:
+- Existing training sessions cannot be edited; the calendar is read-only.
+- Goal session targets do not automatically calculate progress from training records or update goal status.
+- Training lists, calendar, statistics, and dashboard training totals use shared university data and are not scoped to the logged-in trainer's assignments.
+- Customer and training features depend on external university API availability. My Customers omits assignments without a matching directory record.
 
-- CSV export of university customers.
-- A month/week/day calendar for training sessions.
-- Training statistics such as total minutes grouped by activity (**currently postponed**).
-- Cloud deployment and production verification.
-
-Keep the frontend and backend READMEs updated when their functionality changes.
-
----
-
-**Related documentation:** [Full project README](../README.md) · [Backend README](../backend/README.md)
+For database, migration, session, and backend troubleshooting, see the [backend README](../backend/README.md).
