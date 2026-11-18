@@ -1,143 +1,105 @@
 # Personal Trainer Management System
 
-A full-stack web application for personal trainers to browse university-provided customer and training data, manage their own customer assignments, and create and track fitness goals.
+A university full-stack project for personal trainers to manage customer assignments and fitness goals, alongside a shared customer directory and training sessions supplied by the university REST API.
 
-The project consists of a **Spring Boot backend**, a **React/TypeScript frontend**, and a **PostgreSQL database**. The frontend uses a green fitness-inspired Material UI theme.
+The application uses React and TypeScript, a Spring Boot backend, and PostgreSQL.
 
 ## Features
 
-### Trainer accounts and security
+- **Trainer accounts:** registration, session-based login/logout, and a read-only profile. Passwords are hashed with BCrypt; backend mutations require CSRF protection.
+- **Dashboard:** assigned customer and active goal counts, university-wide training counts and minutes, and up to five upcoming active goal deadlines.
+- **Customers:** browse, sort, filter, add, edit, delete, and export the university customer directory to CSV. Assign customers to your account and manage them on **My Customers**.
+- **Fitness goals:** create, edit, delete, and change goals between `ACTIVE`, `COMPLETED`, and `CANCELLED`. Goals support optional descriptions, target dates, and target session counts.
+- **Trainings:** browse, create, and delete university training sessions with customer details and date/time selection.
+- **Calendar and statistics:** month, week, and day calendar views with session details, plus a bar chart of total training minutes by activity.
+- **Interface:** responsive Material UI navigation, data grids, validation feedback, and deletion confirmations.
 
-- Register a trainer account and sign in with email and password.
-- Maintain an authenticated session through Spring Security.
-- Protect private frontend routes and backend endpoints.
-- Use CSRF protection for state-changing backend requests.
-- Log out to end the current session.
+## Architecture and data ownership
 
-### Customer management
+```text
+React frontend
+    ├── University REST API: shared customers and training sessions
+    └── Spring Boot API: accounts, authentication, assignments, goals
+          └── PostgreSQL: Flyway-managed schema
+```
 
-- Browse customers retrieved from the university REST API.
-- Assign university customers to the signed-in trainer.
-- View only the customers assigned to the current trainer on **My Customers**.
-- Remove a trainer-customer assignment.
-- Keep assignment information in the application's PostgreSQL database rather than copying university customer details.
+The frontend accesses the university API separately from the Spring Boot API. The backend also checks university customer existence when creating assignments.
 
-### Fitness goals
+PostgreSQL stores trainer accounts (`trainer`), references to university customers (`trainer_customer`), and assignment-specific goals (`customer_goal`). Customer contact details and training records remain in the university service.
 
-- Create, view, edit, and delete goals for an assigned customer.
-- Set a goal title, optional description, target date, and target number of sessions.
-- Change a goal's status between **ACTIVE**, **COMPLETED**, and **CANCELLED**.
-- Confirm goal deletion through a dialog.
-- Enforce trainer ownership of assignments and goals in the backend.
-
-### Training sessions
-
-- Browse training sessions retrieved from the university REST API.
-- Display their dates, durations, activities, and associated customer names when available.
-
-> **Scope note:** Target sessions are stored as goal targets; automatic training-progress calculations have not been implemented.
+**A local assignment ID is different from a university customer ID.** The route `/my-customers/:assignmentId/goals` uses the local assignment ID. The backend identifies the trainer from the authenticated session and enforces ownership of assignments and goals. Customer and training edits affect the shared university directory, rather than private trainer records.
 
 ## Technology stack
 
 | Layer | Technologies |
 | --- | --- |
-| Frontend | React 19, TypeScript, Vite, React Router, Material UI, MUI Data Grid, Axios, Day.js |
+| Frontend | React 19, TypeScript, Vite, React Router, Material UI, MUI X, Axios, Day.js |
 | Backend | Java 21, Spring Boot 4, Spring Security, Spring Data JPA, Bean Validation, Maven |
-| Database | PostgreSQL 17, Flyway migrations |
-| External data | University Personal Trainer REST API (HAL-style customer and training resources) |
-| Development and CI | Docker Compose, Git, GitHub Actions |
+| Database | PostgreSQL 17, Flyway; H2 for automated tests |
+| Tooling | Docker Compose, GitHub Actions, ESLint |
 
 ## Project structure
 
 ```text
-backend-Project/
-├── backend/                  # Spring Boot REST API, business logic and tests
-│   ├── src/main/java/       # Controllers, services, repositories, entities and DTOs
-│   ├── src/main/resources/  # Application configuration and Flyway migrations
-│   ├── src/test/            # Backend tests
-│   ├── mvnw                  # Maven wrapper
-│   └── pom.xml
-├── frontend/                 # React + TypeScript application
-│   ├── src/
-│   │   ├── components/      # Navigation, logout and route protection
-│   │   ├── pages/           # Login, registration, customers, goals, trainings
-│   │   ├── services/        # Backend and university API clients
-│   │   └── types/           # Shared frontend types
-│   ├── package.json
-│   └── vite.config.ts
-├── compose.yaml              # Local PostgreSQL service
-└── README.md                 # This file
+backend/
+├── src/main/java/       # Controllers, services, security, entities and DTOs
+├── src/main/resources/  # Application properties and Flyway migrations
+├── src/test/            # Backend tests and test configuration
+├── Dockerfile
+├── mvnw
+└── pom.xml
+frontend/
+├── src/components/     # Navigation and route protection
+├── src/pages/          # Dashboard, accounts, customers, goals and trainings
+├── src/services/       # Spring Boot and university API clients
+├── src/types/
+├── vite.config.ts      # Development proxy
+└── vercel.json         # Deployment rewrites
+compose.yaml            # PostgreSQL and backend services
 ```
-
-## Architecture and data flow
-
-```text
-React frontend (Vite)
-    ├── University REST API
-    │     ├── Customer directory
-    │     └── Training sessions
-    │
-    └── Spring Boot backend
-          ├── Trainer registration and authentication
-          ├── Trainer-customer assignments
-          ├── Customer fitness goals
-          ├── Spring Security session and CSRF protection
-          └── PostgreSQL (Flyway-managed schema)
-```
-
-**University customer IDs and local assignment IDs are different.** The university API owns the original customer and training records. PostgreSQL stores trainer accounts, references to assigned university customers, and goals belonging to those assignments. When opening a goal-management route such as `/my-customers/:assignmentId/goals`, `assignmentId` refers to the local `trainer_customer` record, **not** the university customer ID.
-
-The backend determines the trainer from the authenticated session; the frontend does not submit a trainer ID to claim ownership of a resource.
-
-## Prerequisites
-
-Install the following before running the application locally:
-
-- **Java 21**
-- **Node.js and npm** compatible with the installed Vite version
-- **Docker Desktop** (or Docker Engine with Docker Compose)
-- **Git**
-
-The Maven wrapper is included in `backend/`, so a separate Maven installation is not required.
 
 ## Local development
 
-Run these commands from the project root unless a different directory is specified. Use separate terminals for the backend and frontend.
+Prerequisites: Docker with Compose, Node.js 22.12 or later in the Node 22 series, and npm. Java 21 is also required if running the backend outside Docker; the Maven wrapper is included.
 
-### 1. Start PostgreSQL
+Run the following from the project root.
 
-The local setup uses PostgreSQL 17 with the database `trainer_db` and host port **5433**.
+### 1. Start PostgreSQL and the backend
 
-Configure `DB_PASSWORD` to match the password expected by your local Docker Compose and Spring Boot configuration. For example, in a macOS/Linux terminal:
+Set a local database password in the root `.env` file (ignored by Git):
 
-```bash
-export DB_PASSWORD="your-local-database-password"
-docker compose up -d
+```dotenv
+POSTGRES_PASSWORD=your-local-database-password
 ```
 
-Check that the database container is running:
+Then start both services:
 
 ```bash
+docker compose up -d --build
 docker compose ps
 ```
 
-Keep database passwords and other secrets out of Git. If your project uses a local `.env` file, do not commit real credentials.
+Compose exposes PostgreSQL at `localhost:5433` (database `trainer_db`, user `trainer`) and the backend at `http://localhost:8080`. Flyway applies schema migrations during backend startup. Database data persists in the `trainer_postgres_data` volume.
 
-### 2. Start the Spring Boot backend
+### 2. Configure the frontend for local services
 
-In a new terminal, from the root directory:
+**The checked-in Vite `/api` proxy targets the Render backend.** To use the backend started above, change its target in `frontend/vite.config.ts` to:
 
-```bash
-cd backend
-export DB_PASSWORD="your-local-database-password"
-./mvnw spring-boot:run
+```ts
+target: 'http://localhost:8080',
 ```
 
-The backend runs on **http://localhost:8080** in the local development setup. Flyway applies database migrations during startup.
+Set the university API URL in `frontend/.env.local`:
 
-### 3. Start the React frontend
+```dotenv
+VITE_TRAINER_API=https://customer-rest-service-frontend-personaltrainer.2.rahtiapp.fi/api/
+```
 
-In another terminal, from the root directory:
+Keep the trailing slash because the API client uses relative resource paths. Vite exposes `VITE_` variables to the browser; use them only for public configuration.
+
+### 3. Start the frontend
+
+In another terminal:
 
 ```bash
 cd frontend
@@ -145,106 +107,67 @@ npm ci
 npm run dev
 ```
 
-Open the local address printed by Vite, normally **http://localhost:5173**.
+Open the URL printed by Vite, normally `http://localhost:5173`. Register an account, sign in, and assign a customer from **Customers**. Open **My Customers** to manage that assignment's goals. Restart Vite after changing environment or proxy settings.
 
-Register a trainer account, sign in, and use the navigation to open **Customers**, **My Customers**, and **Trainings**. Goals can be managed from a customer assignment on **My Customers**.
+### Alternative: run Spring Boot outside Docker
 
-### External university API
+Start only the database with `docker compose up -d postgres`. Leave the Compose backend stopped so port 8080 is available, then run:
 
-The application retrieves university-managed customer and training data from:
-
-```text
-https://customer-rest-service-frontend-personaltrainer.2.rahtiapp.fi/api
+```bash
+cd backend
+export DB_PASSWORD="your-local-database-password"
+./mvnw spring-boot:run
 ```
 
-An internet connection and an available university service are required for those views. If the service is down, customer or training data may fail to load even while the local backend and database are healthy.
+`DB_PASSWORD` must match the database's `POSTGRES_PASSWORD`. Compose reads the root `.env` automatically; Spring Boot's Maven launch uses the exported variable. If the Compose backend is already running, stop it with `docker compose stop backend` first.
 
-## Authentication and authorization
+## API reference
 
-- Registration creates a trainer account; the trainer signs in separately.
-- Login uses a Spring Security session stored in a browser cookie.
-- The frontend retrieves a CSRF token before protected state-changing requests through the authentication service.
-- Protected React routes improve navigation behavior, but **the backend remains responsible for authorization**.
-- Trainer-customer assignments and fitness goals are scoped to the authenticated trainer.
-- A trainer cannot access another trainer's assignments or goals by guessing URL IDs.
+The frontend uses `/api` for Spring Boot requests, with session cookies and CSRF tokens for mutations. Registration creates an account; sign in separately afterward.
 
-### Main application routes
-
-| Frontend route | Purpose |
+| Backend path | Methods and purpose |
 | --- | --- |
-| `/login` | Sign in |
-| `/register` | Create a trainer account |
-| `/customers` | Browse the university customer directory; assign/remove customers |
-| `/my-customers` | View customers assigned to the signed-in trainer |
-| `/my-customers/:assignmentId/goals` | Manage goals for an owned assignment |
-| `/trainings` | Browse university training sessions |
+| `/api/csrf` | `GET` CSRF token |
+| `/api/trainers/register` | `POST` register |
+| `/api/trainers/login` | `POST` sign in |
+| `/api/trainers/logout` | `POST` sign out |
+| `/api/trainers/me` | `GET` current trainer |
+| `/api/trainer-customers` | `GET` assignments; `POST` assign customer |
+| `/api/trainer-customers/{assignmentId}` | `GET` assignment; `DELETE` remove assignment |
+| `/api/trainer-customers/{assignmentId}/goals` | `GET` goals; `POST` create goal |
+| `/api/trainer-customers/{assignmentId}/goals/{goalId}` | `GET`, `PUT`, `DELETE` goal |
+| `/api/trainer-customers/{assignmentId}/goals/{goalId}/status` | `PATCH` goal status |
 
-### Backend API overview
+Request and response shapes are defined in [backend DTOs](backend/src/main/java/com/fitnesstracker/backend/dto) and [frontend services](frontend/src/services).
 
-| Endpoint | Purpose |
-| --- | --- |
-| `/api/csrf` | Obtain CSRF token information |
-| `/api/trainer-customers` | List or create trainer-customer assignments |
-| `/api/trainer-customers/{assignmentId}` | Access or remove an individual assignment |
-| `/api/trainer-customers/{assignmentId}/goals` | List or create goals for an assignment |
-| `/api/trainer-customers/{assignmentId}/goals/{goalId}` | Access, edit, or delete a goal |
+## Checks
 
-The goal API also supports a status-change operation. See the backend controllers for the exact HTTP methods and request bodies. Authentication endpoints are implemented in the trainer controller and consumed through `frontend/src/services/authService.ts`.
-
-## Database and migrations
-
-Flyway manages the PostgreSQL schema. The current domain includes:
-
-- `trainer`: registered trainer accounts and password hashes.
-- `trainer_customer`: the association between a trainer and a university customer ID.
-- `customer_goal`: goals attached to a specific trainer-customer assignment.
-
-The schema has evolved through versioned migrations. Do not manually recreate these tables in a running database; use Flyway migrations when changing the schema.
-
-## Testing and quality checks
-
-### Backend
-
-From `backend/`:
+Run backend tests from `backend/`:
 
 ```bash
 ./mvnw test
 ```
 
-The backend test suite covers authentication, CSRF-protected requests, customer assignments, goal operations, and trainer ownership/isolation.
+Tests use H2 with Flyway migrations and cover authentication, CSRF, assignments, goals, and trainer ownership. A local PostgreSQL instance is not required by the test configuration.
 
-### Frontend
-
-From `frontend/`:
+Run frontend checks from `frontend/`:
 
 ```bash
 npm run lint
 npm run build
 ```
 
-For a manual end-to-end check, start both applications and verify login, customer assignment/removal, goal CRUD and status changes, and training data loading.
+[GitHub Actions](.github/workflows/ci.yml) runs backend tests and frontend lint/build checks for pushes and pull requests to `main`. The backend CI job also provisions PostgreSQL, though tests are configured to use H2.
 
-### Continuous integration
+## Deployment configuration
 
-GitHub Actions runs backend checks with a PostgreSQL service and frontend lint/build checks on repository changes. Review the Actions tab for the latest workflow results.
+[frontend/vercel.json](frontend/vercel.json) configures Vercel to forward `/api/*` to the Render backend and `/university-api/*` to the university service, with an SPA fallback for client routes. For this configuration, set `VITE_TRAINER_API=/university-api/` at frontend build time.
 
-## Current scope and planned improvements
+The backend can be built using [backend/Dockerfile](backend/Dockerfile). Supply `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD` for its PostgreSQL connection. Hosting availability and database provisioning are managed outside this repository.
 
-The application currently includes trainer authentication, a university customer directory, trainer-specific assignments, fitness-goal management, training-session browsing, and a responsive green Material UI design.
+## Limitations
 
-The following items are **planned, not yet implemented**:
-
-- CSV export of university customers.
-- A training calendar with month, week, and day views.
-- Training statistics grouped by activity.
-- Cloud deployment of the full application.
-
-Training notes and automatic goal-progress calculations are **not part of the current implementation**.
-
-## Development workflow
-
-Changes are developed incrementally, normally with **one file per commit**. Before committing a frontend change, run lint and build; before committing a backend change, run the relevant Maven tests. Push commits and verify GitHub Actions after changes are integrated.
-
-## Project context
-
-This is a university full-stack development project. The application combines data from the university Personal Trainer REST API with private, trainer-owned records stored in its own backend and PostgreSQL database.
+- Existing training sessions cannot be edited in the current UI.
+- Target session counts are stored as goals; training sessions do not automatically update goal progress or status.
+- Training lists, calendar, statistics, and dashboard training totals use the shared university data, rather than filtering to the trainer's assignments.
+- Customer and training operations depend on the external university API being available.
