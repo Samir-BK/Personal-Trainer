@@ -77,18 +77,6 @@ export async function getCustomerGoals(
     return response.data;
 }
 
-// Retrieve one specific goal with backend ownership verification.
-export async function getCustomerGoal(
-    assignmentId: number,
-    goalId: number,
-): Promise<CustomerGoal> {
-    const response = await api.get<CustomerGoal>(
-        `/trainer-customers/${assignmentId}/goals/${goalId}`,
-    );
-
-    return response.data;
-}
-
 // Update the editable details of an existing goal.
 // The status is intentionally excluded because it has its own endpoint.
 export async function updateCustomerGoal(

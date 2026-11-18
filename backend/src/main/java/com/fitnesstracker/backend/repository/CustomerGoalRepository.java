@@ -19,13 +19,6 @@ public interface CustomerGoalRepository
             Long trainerId
     );
 
-    // Retrieve a single goal only if it belongs to the authenticated trainer.
-    // The goal ID alone is insufficient for authorization.
-    Optional<CustomerGoal> findByIdAndTrainerCustomer_Trainer_Id(
-            Long goalId,
-            Long trainerId
-    );
-
     // Retrieve a goal belonging to a particular customer assignment,
     // while also verifying ownership of that assignment.
     // Useful for update and delete operations.

@@ -29,10 +29,4 @@ public interface TrainerCustomerRepository
             Long trainerId
     );
 
-    // Retrieve a specific university customer assigned to a trainer.
-    // Useful when creating goals and training notes later.
-    Optional<TrainerCustomer> findByTrainer_IdAndUniversityCustomerId(
-            Long trainerId,
-            Long universityCustomerId
-    );
 }

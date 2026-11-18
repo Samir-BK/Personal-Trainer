@@ -153,8 +153,6 @@ public class CustomerGoal {
         return updatedAt;
     }
 
-    // Keep the enum inside this entity for now.
-    // This lets us commit the complete model as one file.
     public enum GoalStatus {
         ACTIVE,
         COMPLETED,

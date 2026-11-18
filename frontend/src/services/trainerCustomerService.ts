@@ -53,17 +53,6 @@ export async function getAssignedCustomers(): Promise<
   return response.data;
 }
 
-// Retrieve one assignment, with ownership enforced by the backend.
-export async function getAssignment(
-  assignmentId: number,
-): Promise<TrainerCustomerAssignment> {
-  const response = await api.get<TrainerCustomerAssignment>(
-    `/trainer-customers/${assignmentId}`,
-  );
-
-  return response.data;
-}
-
 // Remove an assignment belonging to the logged-in trainer.
 export async function removeAssignment(
   assignmentId: number,

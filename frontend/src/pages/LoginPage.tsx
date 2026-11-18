@@ -37,7 +37,7 @@ export function LoginPage() {
     // Controls whether the password field displays plain text.
     const [showPassword, setShowPassword] = useState(false);
 
-    // Navigate to the customer directory after successful login.
+    // Navigate to Home (/) after successful login.
     const navigate = useNavigate();
 
     // Handle login without reloading the browser.
@@ -74,7 +74,7 @@ export function LoginPage() {
             // The browser uses its session cookie for later requests.
             await authService.getCurrentTrainer();
 
-            // Redirect to the customer directory after successful login.
+            // Redirect to Home (/) after successful login.
             navigate("/", { replace: true });
 
         } catch (error: unknown) {

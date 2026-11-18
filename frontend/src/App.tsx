@@ -17,9 +17,6 @@ import {
   createTheme,
 } from "@mui/material";
 
-// Used to preserve the existing LoginPage component type workaround.
-import type { ComponentType } from "react";
-
 // Import the application pages.
 // Each page has its own component to keep App.tsx focused on routing.
 import { CustomerList } from "./pages/CustomerList";
@@ -37,11 +34,6 @@ import { TrainerProfile } from "./pages/TrainerProfile";
 // NavigationActions displays navigation links and the logout control.
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { NavigationActions } from "./components/NavigationActions";
-
-// Keep the existing workaround for the LoginPage component type.
-// This does not change how LoginPage works at runtime.
-// We can remove it later after correcting the underlying component typing.
-const LoginPageComponent = LoginPage as unknown as ComponentType;
 
 // Create a shared Material UI theme for the entire application.
 // Defining it outside App avoids recreating the theme on every render.
@@ -262,7 +254,7 @@ export function App() {
                                 Allows existing trainers to sign in. */}
               <Route
                 path="/login"
-                element={<LoginPageComponent />}
+                element={<LoginPage />}
               />
 
               {/* Registration page:
